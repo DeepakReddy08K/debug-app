@@ -1,39 +1,52 @@
-// Rate limiting
+// Rate limiting — prevents abuse and reduces load on AI and Judge0 services
 
 import rateLimit from 'express-rate-limit';
+import log from './logger.js';
 
 // General API — applied to all routes in server.js
 export const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                  // 100 requests per IP per 15 min
-  message: { error: 'Too many requests, slow down.' },
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    log.warn('rateLimiter', `General limit exceeded: ${req.ip}`);
+    res.status(429).json({ error: 'Too many requests, slow down.' });
+  },
 });
 
-// Auth routes 
+// Auth routes — prevents brute force
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,                   // only 10 auth attempts per IP per 15 min
-  message: { error: 'Too many auth attempts, try again later.' },
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    log.warn('rateLimiter', `Auth limit exceeded: ${req.ip}`);
+    res.status(429).json({ error: 'Too many auth attempts, try again later.' });
+  },
 });
 
-// AI routes 
+// AI routes — expensive, limit heavily
 export const aiLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,                   // 20 AI requests per IP per hour
-  message: { error: 'AI rate limit reached. Try again in an hour.' },
+  windowMs: 60 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    log.warn('rateLimiter', `AI limit exceeded: ${req.ip}`);
+    res.status(429).json({ error: 'AI rate limit reached. Try again in an hour.' });
+  },
 });
 
-// Judge0 execution 
+// Judge0 execution — high limit because each run makes many calls
 export const executionLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 200,
-  message: { error: 'Execution limit reached. Try again in an hour.' },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    log.warn('rateLimiter', `Execution limit exceeded: ${req.ip}`);
+    res.status(429).json({ error: 'Execution limit reached. Try again in an hour.' });
+  },
 });
