@@ -1,6 +1,6 @@
 import express from 'express';
 import passport from '../config/passport.js';
-import { register, login, logout, verifyEmail,declineEmail, googleCallback, getMe } from '../controllers/authController.js';
+import { register, login, logout, verifyEmail, declineEmail, googleCallback, getMe, forgotPassword, verifyForgotOTP, resetPassword } from '../controllers/authController.js';
 import { authLimiter } from '../config/rateLimiter.js';
 import { isAuthenticated } from '../middleware/authMiddleware.js';
 
@@ -14,6 +14,11 @@ router.get('/verify/:token', verifyEmail);
 router.get('/decline/:token', declineEmail);
 // Get current logged in user — protected route
 router.get('/me', isAuthenticated, getMe);
+
+// Forgot password routes
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/verify-otp', authLimiter, verifyForgotOTP);
+router.post('/reset-password', authLimiter, resetPassword);
 
 // Google OAuth routes
 router.get('/google', passport.authenticate('google', {

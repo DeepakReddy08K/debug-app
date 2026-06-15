@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
-import { createUser, findByEmail, verifyUserEmail, deleteUnverifiedUser, findById } from '../models/userModel.js';
+import { createUser, findByEmail, deleteUnverifiedUser, verifyUserEmail, findOrCreateGoogleUser, findById, saveOTP, verifyOTP, updatePassword } from '../models/userModel.js';
 import log from '../config/logger.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -43,13 +43,19 @@ export const register = async (req, res) => {
     }
 
     // Check if email already exists
-    log.step('authController', '2', 'Checking if email exists');
-    const existingUser = await findByEmail(email);
-    if (existingUser) {
-      log.warn('authController', `Email already registered: ${email}`);
-      return res.status(409).json({ error: 'Email already registered.' });
-    }
-
+log.step('authController', '2', 'Checking if email exists');
+const existingUser = await findByEmail(email);
+if (existingUser) {
+  // If user exists but not verified — delete and re-register with fresh token
+  if (!existingUser.is_verified) {
+    log.warn('authController', `Re-registering unverified user: ${email}`);
+    await deleteUnverifiedUser(existingUser.verification_token);
+  } else {
+    // Verified user already exists
+    log.warn('authController', `Email already registered: ${email}`);
+    return res.status(409).json({ error: 'Email already registered, try to login!' });
+  }
+}
     // Hash password
     log.step('authController', '3', 'Hashing password');
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -69,6 +75,11 @@ export const register = async (req, res) => {
       from: `"Debug App" <${process.env.MAIL_USER}>`,
       to: email,
       subject: 'Verify your Debug App account',
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'High',
+      },
       html: `
   <!DOCTYPE html>
   <html>
@@ -287,5 +298,135 @@ export const declineEmail = async (req, res) => {
   } catch (err) {
     log.error('authController', 'Decline failed', err);
     res.status(500).json({ error: 'Something went wrong.' });
+  }
+};
+
+// Send OTP to email for password reset
+export const forgotPassword = async (req, res) => {
+  log.step('authController', '1', 'Forgot password request received');
+  const { email } = req.body;
+
+  try {
+    if (!email) {
+      log.warn('authController', 'No email provided for forgot password');
+      return res.status(400).json({ error: 'Email is required.' });
+    }
+
+    // Check if user exists
+    log.step('authController', '2', `Finding user: ${email}`);
+    const user = await findByEmail(email);
+    if (!user) {
+      // Don't reveal if email exists or not for security
+      log.warn('authController', 'user not found');
+      return res.status(200).json({ message: 'If this email exists you will receive an OTP.' });
+    }
+
+    // Block Google OAuth users from resetting password
+    if (!user.password) {
+      log.warn('authController', 'Google user tried forgot password');
+      return res.status(400).json({ error: 'This account uses Google login. No password to reset.' });
+    }
+
+    // Generate 6 digit OTP
+    log.step('authController', '3', 'Generating OTP');
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Save OTP to DB
+    log.step('authController', '4', 'Saving OTP to DB');
+    await saveOTP(email, otp);
+
+    // Send OTP email
+    log.step('authController', '5', 'Sending OTP email');
+    await transporter.sendMail({
+      from: `"Debug App" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: 'Your Debug App Password Reset OTP',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 30px;">
+            <div style="max-width: 500px; margin: auto; background: white; border-radius: 10px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <h2 style="color: #1a1a1a;">Password Reset OTP</h2>
+              <p style="color: #555;">You requested a password reset for your Debug App account.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <div style="background: #f0f0f0; border-radius: 8px; padding: 20px; display: inline-block;">
+                  <h1 style="color: #1a1a1a; letter-spacing: 8px; margin: 0;">${otp}</h1>
+                </div>
+              </div>
+              <p style="color: #555; text-align: center;">This OTP expires in <strong>10 minutes</strong>.</p>
+              <p style="color: #999; font-size: 12px; text-align: center;">If you didn't request this, ignore this email.</p>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    log.success('authController', `OTP sent to: ${email}`);
+    res.status(200).json({ message: 'OTP sent to your email.' });
+
+  } catch (err) {
+    log.error('authController', 'Forgot password failed', err);
+    res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+  }
+};
+
+// Verify OTP
+export const verifyForgotOTP = async (req, res) => {
+  log.step('authController', '1', 'Verify OTP request received');
+  const { email, otp } = req.body;
+
+  try {
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP are required.' });
+    }
+
+    log.step('authController', '2', `Verifying OTP for: ${email}`);
+    const user = await verifyOTP(email, otp);
+    if (!user) {
+      log.warn('authController', `Invalid or expired OTP for: ${email}`);
+      return res.status(400).json({ error: 'Invalid or expired OTP.' });
+    }
+
+    log.success('authController', `OTP verified for: ${email}`);
+    res.status(200).json({ message: 'OTP verified successfully.' });
+
+  } catch (err) {
+    log.error('authController', 'OTP verification failed', err);
+    res.status(500).json({ error: 'OTP verification failed. Please try again.' });
+  }
+};
+
+// Reset password after OTP verified
+export const resetPassword = async (req, res) => {
+  log.step('authController', '1', 'Reset password request received');
+  const { email, password } = req.body;
+
+  try {
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+
+    // Hash new password
+    log.step('authController', '2', 'Hashing new password');
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Update password in DB
+    log.step('authController', '3', 'Updating password in DB');
+    const user = await updatePassword(email, hashedPassword);
+    if (!user) {
+      log.warn('authController', `User not found for reset: ${email}`);
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    log.success('authController', `Password reset for: ${email}`);
+    res.status(200).json({ message: 'Password reset successfully. You can now login.' });
+
+  } catch (err) {
+    log.error('authController', 'Reset password failed', err);
+    res.status(500).json({ error: 'Password reset failed. Please try again.' });
   }
 };

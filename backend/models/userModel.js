@@ -61,14 +61,13 @@ export const findOrCreateGoogleUser = async (googleId, email, name, avatarUrl) =
     [googleId, email]
   );
 
-  if (existing.rows[0]) {
-    // Update google_id if user registered traditionally before
-    await pool.query(
-      `UPDATE users SET google_id = $1, avatar_url = $2 WHERE email = $3`,
-      [googleId, avatarUrl, email]
-    );
-    return existing.rows[0];
-  }
+if (existing.rows[0]) {
+  await pool.query(
+    `UPDATE users SET google_id = $1, avatar_url = $2, is_verified = TRUE WHERE email = $3`,
+    [googleId, avatarUrl, email]
+  );
+  return existing.rows[0];
+}
 
   // Create new Google user (no password, already verified)
   const result = await pool.query(
@@ -77,4 +76,42 @@ export const findOrCreateGoogleUser = async (googleId, email, name, avatarUrl) =
     [name, email, googleId, avatarUrl]
   );
   return result.rows[0];
+};
+
+// Save OTP and expiry to user
+export const saveOTP = async (email, otp) => {
+  log.step('userModel', '7', `Saving OTP for: ${email}`);
+  const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  const result = await pool.query(
+    `UPDATE users SET otp = $1, otp_expires = $2 WHERE email = $3 RETURNING id, email`,
+    [otp, otpExpires, email]
+  );
+  return result.rows[0] || null;
+};
+
+// Verify OTP and clear it
+export const verifyOTP = async (email, otp) => {
+  log.step('userModel', '8', `Verifying OTP for: ${email}`);
+  const result = await pool.query(
+    `SELECT * FROM users WHERE email = $1 AND otp = $2 AND otp_expires > NOW()`,
+    [email, otp]
+  );
+  if (!result.rows[0]) return null;
+
+  // Clear OTP after successful verification
+  await pool.query(
+    `UPDATE users SET otp = NULL, otp_expires = NULL WHERE email = $1`,
+    [email]
+  );
+  return result.rows[0];
+};
+
+// Update password
+export const updatePassword = async (email, hashedPassword) => {
+  log.step('userModel', '9', `Updating password for: ${email}`);
+  const result = await pool.query(
+    `UPDATE users SET password = $1 WHERE email = $2 RETURNING id, email`,
+    [hashedPassword, email]
+  );
+  return result.rows[0] || null;
 };

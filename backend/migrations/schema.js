@@ -17,6 +17,12 @@ const migrate = async () => {
       );
     `);
     console.log('✓ users table created');
+      await pool.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS otp VARCHAR(6),
+        ADD COLUMN IF NOT EXISTS otp_expires TIMESTAMP;
+      `);
+console.log('✓ OTP columns added to users table');
     process.exit(0);
   } catch (err) {
     console.error('Migration failed:', err.message);
