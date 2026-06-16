@@ -1,7 +1,16 @@
+//branch 1
 import { callNemotron } from '../config/nvidiaClient.js';
 import { createRun, updateConstraints } from '../models/runModel.js';
+//branch 2a
+import { callDeepSeek } from '../config/nvidiaClient.js';
+import { updateSyntaxCheck } from '../models/runModel.js';
+//for consoling logs
 import log from '../config/logger.js';
+//to fix common ai-generated json issues
+import { jsonrepair } from 'jsonrepair';
 
+
+//branch 1
 // Detect language from code patterns
 const detectLanguage = (code) => {
   if (/#include|using namespace|int main|cout|cin/.test(code)) return 'cpp';
@@ -95,19 +104,23 @@ Include at least 5-8 categories covering: small/trivial cases, boundary values, 
     log.step('debugController', '5', 'Calling Nemotron for analysis');
     const aiResponse = await callNemotron(prompt);
 
-    log.step('debugController', '6', 'Parsing AI response');
+log.step('debugController', '6', 'Parsing AI response');
 let cleanResponse = aiResponse.replace(/```json\n?|```\n?/g, '').trim();
-
-cleanResponse = cleanResponse.replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
-cleanResponse = cleanResponse.replace(/\/\/.*$/gm, ''); // line comments
+cleanResponse = cleanResponse.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
 let schema;
 try {
   schema = JSON.parse(cleanResponse);
 } catch (parseErr) {
-  log.error('debugController', 'Failed to parse Branch 1 JSON', parseErr);
-  log.error('debugController', 'Raw AI response was', cleanResponse.slice(0, 500));
-  return res.status(500).json({ error: 'AI returned invalid format. Please try again.' });
+  log.warn('debugController', 'Initial JSON parse failed, attempting repair in branch 1');
+  try {
+    schema = JSON.parse(jsonrepair(cleanResponse));
+    log.success('debugController', 'JSON repaired successfully in branch 1');
+  } catch (repairErr) {
+    log.error('debugController', 'JSON repair also failed in branch 1', repairErr);
+    log.error('debugController', 'Raw AI response was', cleanResponse.slice(0, 1000));
+    return res.status(500).json({ error: 'AI returned invalid format. Please try again in branch 1.' });
+  }
 }
 
     log.step('debugController', '7', 'Saving constraints to DB');
@@ -119,5 +132,70 @@ try {
   } catch (err) {
     log.error('debugController', 'Branch 1 failed', err);
     res.status(500).json({ error: 'Analysis failed. Please try again.' });
+  }
+};
+
+
+//branch 2a
+
+// Branch 2a — Check syntax/runtime errors in buggy code
+export const checkSyntax = async (req, res) => {
+  log.step('debugController', '1', 'Branch 2a: check-syntax started');
+  const { runId, buggyCode, language } = req.body;
+
+  try {
+    if (!runId || !buggyCode || !language) {
+      log.warn('debugController', 'Missing fields in checkSyntax request');
+      return res.status(400).json({ error: 'runId, buggyCode and language are required.' });
+    }
+
+    log.step('debugController', '2', 'Building Branch 2a prompt');
+    const prompt = `You are a strict syntax-only checker for ${language} code. Flag ONLY compile errors or guaranteed runtime crashes (e.g. missing semicolons, unmatched brackets, undeclared variables, type mismatches that fail to compile, null pointer dereference that always crashes). Do NOT flag logic differences compared to any reference — that is handled elsewhere. Default to has_errors: false when in doubt.
+
+Code to check:
+${buggyCode}
+
+Output ONLY a valid JSON object, no markdown, no explanation, in this exact structure:
+{
+  "has_errors": boolean,
+  "error_type": "syntax|runtime|both|none",
+  "errors": [
+    { "type": "syntax|runtime", "line": number, "description": "string", "severity": "critical|warning", "fix_suggestion": "string" }
+  ],
+  "summary": "one line summary",
+  "can_proceed_to_testing": boolean
+}`;
+
+    log.step('debugController', '3', 'Calling DeepSeek for syntax check');
+    const aiResponse = await callDeepSeek(prompt);
+
+log.step('debugController', '4', 'Parsing AI response');
+let cleanResponse = aiResponse.replace(/```json\n?|```\n?/g, '').trim();
+cleanResponse = cleanResponse.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+let result;
+try {
+  result = JSON.parse(cleanResponse);
+} catch (parseErr) {
+  log.warn('debugController', 'Initial JSON parse failed, attempting repair in branch 2a');
+  try {
+    result = JSON.parse(jsonrepair(cleanResponse));
+    log.success('debugController', 'JSON repaired successfully in branch 2a');
+  } catch (repairErr) {
+    log.error('debugController', 'JSON repair also failed in branch 2a', repairErr);
+    log.error('debugController', 'Raw AI response was', cleanResponse.slice(0, 1000));
+    return res.status(500).json({ error: 'AI returned invalid format. Please try again.' });
+  }
+}
+
+    log.step('debugController', '5', 'Saving syntax check to DB');
+    await updateSyntaxCheck(runId, result);
+
+    log.success('debugController', `Branch 2a completed for run: ${runId}`);
+    res.status(200).json({ runId, syntaxCheck: result });
+
+  } catch (err) {
+    log.error('debugController', 'Branch 2a failed', err);
+    res.status(500).json({ error: 'Syntax check failed. Please try again.' });
   }
 };
