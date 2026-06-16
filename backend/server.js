@@ -10,6 +10,7 @@ import cookieParser from 'cookie-parser';
 import passport from './config/passport.js';
 import './config/db.js';
 import pool from './config/db.js';
+import debugRoutes from './routes/debug.js';
 import log from './config/logger.js';
 import { generalLimiter } from './config/rateLimiter.js';
 
@@ -64,7 +65,7 @@ app.get('/', (req, res) => {
 
 // Routes mounted here as we build them
 app.use('/api/auth', authRoutes);
-// app.use('/api/debug', debugRoutes);
+app.use('/api/debug', debugRoutes);
 // app.use('/api/chat', chatRoutes);
 // app.use('/api/history', historyRoutes);
 
