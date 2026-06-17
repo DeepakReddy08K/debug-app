@@ -3,6 +3,7 @@ import log from './logger.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { Buffer } from 'buffer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,10 @@ export const JUDGE0_LANGUAGE_IDS = {
   javascript: 63,
 };
 
+// Base64 helpers — Judge0 requires this to avoid UTF-8 conversion errors
+export const toBase64 = (str) => Buffer.from(str || '', 'utf-8').toString('base64');
+export const fromBase64 = (str) => (str ? Buffer.from(str, 'base64').toString('utf-8') : str);
+
 // Cooldown state — once RapidAPI fails, skip it for 1 hour
 let isRapidApiOnCooldown = false;
 let cooldownTimer = null;
@@ -35,11 +40,12 @@ const triggerCooldown = () => {
 };
 
 // Submit batch — tries RapidAPI first, falls back to ce.judge0.com on 429/403/network error
+// Expects submissions with PLAIN TEXT source_code/stdin — this function base64 encodes them
 export const submitBatch = async (submissions) => {
   const useFallback = isRapidApiOnCooldown;
   const targetUrl = useFallback
-    ? `${FALLBACK_BASE}/submissions/batch?base64_encoded=false`
-    : `${RAPIDAPI_BASE}/submissions/batch?base64_encoded=false`;
+    ? `${FALLBACK_BASE}/submissions/batch?base64_encoded=true`
+    : `${RAPIDAPI_BASE}/submissions/batch?base64_encoded=true`;
 
   const headers = { 'content-type': 'application/json' };
   if (!useFallback) {
@@ -47,30 +53,36 @@ export const submitBatch = async (submissions) => {
     headers['X-RapidAPI-Host'] = RAPIDAPI_HOST;
   }
 
+  // Encode source_code and stdin to base64
+  const encodedSubmissions = submissions.map(s => ({
+    ...s,
+    source_code: toBase64(s.source_code),
+    stdin: toBase64(s.stdin),
+  }));
+
   log.step('judge0Client', '1', `Submitting batch of ${submissions.length} via ${useFallback ? 'public fallback' : 'RapidAPI'}`);
 
   try {
-    const response = await axios.post(targetUrl, { submissions }, { headers });
+    const response = await axios.post(targetUrl, { submissions: encodedSubmissions }, { headers });
     return response.data;
   } catch (err) {
     const status = err.response?.status;
     if (!useFallback && (status === 429 || status === 403)) {
       log.warn('judge0Client', `RapidAPI quota hit (${status}), switching to public instance`);
       triggerCooldown();
-      return submitBatch(submissions); // retry immediately via fallback
+      return submitBatch(submissions); // retry immediately via fallback, re-encodes fresh
     }
     if (!useFallback) {
       log.warn('judge0Client', 'RapidAPI network error, switching to public instance', err.message);
       triggerCooldown();
       return submitBatch(submissions);
     }
-    // Already on fallback and it failed too — propagate error to trigger OnlineCompiler.io
-    log.error('judge0Client', 'Public Judge0 instance also failed', err.message);
+    log.error('judge0Client', 'Public Judge0 instance also failed', err.response?.data || err.message);
     throw err;
   }
 };
 
-// Poll batch results — uses same endpoint logic (cooldown state) as submitBatch
+// Poll batch results — returns DECODED plain text results
 export const getBatchResults = async (tokens) => {
   const useFallback = isRapidApiOnCooldown;
   const baseUrl = useFallback ? FALLBACK_BASE : RAPIDAPI_BASE;
@@ -83,11 +95,22 @@ export const getBatchResults = async (tokens) => {
   }
 
   log.step('judge0Client', '2', `Polling batch results via ${useFallback ? 'public fallback' : 'RapidAPI'}`);
-  const response = await axios.get(
-    `${baseUrl}/submissions/batch?tokens=${tokenStr}&base64_encoded=false&fields=stdout,stderr,status,compile_output`,
-    { headers }
-  );
-  return response.data.submissions;
+  try {
+    const response = await axios.get(
+      `${baseUrl}/submissions/batch?tokens=${tokenStr}&base64_encoded=true&fields=stdout,stderr,status,compile_output`,
+      { headers }
+    );
+    // Decode each result back to plain text
+    return response.data.submissions.map(r => ({
+      ...r,
+      stdout: fromBase64(r.stdout),
+      stderr: fromBase64(r.stderr),
+      compile_output: fromBase64(r.compile_output),
+    }));
+  } catch (err) {
+    log.error('judge0Client', 'getBatchResults failed', err.response?.data || err.message);
+    throw err;
+  }
 };
 
 // Wait until all submissions are done processing
