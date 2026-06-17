@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
-import { createUser, findByEmail, deleteUnverifiedUser, verifyUserEmail, findOrCreateGoogleUser, findById, saveOTP, verifyOTP, updatePassword } from '../models/userModel.js';
+import { createUser, findByEmail, deleteUnverifiedUser, verifyUserEmail, findOrCreateGoogleUser, findById, saveOTP, verifyOTP, updatePassword, verifyResetToken, clearResetToken } from '../models/userModel.js';
 import log from '../config/logger.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -388,7 +388,7 @@ export const verifyForgotOTP = async (req, res) => {
     }
 
     log.success('authController', `OTP verified for: ${email}`);
-    res.status(200).json({ message: 'OTP verified successfully.' });
+    res.status(200).json({ message: 'OTP verified successfully.', resetToken: user.resetToken });
 
   } catch (err) {
     log.error('authController', 'OTP verification failed', err);
@@ -399,28 +399,33 @@ export const verifyForgotOTP = async (req, res) => {
 // Reset password after OTP verified
 export const resetPassword = async (req, res) => {
   log.step('authController', '1', 'Reset password request received');
-  const { email, password } = req.body;
+  const { email, password, resetToken } = req.body;
 
   try {
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required.' });
+    if (!email || !password || !resetToken) {
+      return res.status(400).json({ error: 'Email, password and reset token are required.' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
     }
 
-    // Hash new password
-    log.step('authController', '2', 'Hashing new password');
+    // Verify reset token is valid before allowing password change
+    log.step('authController', '2', 'Verifying reset token');
+    const validUser = await verifyResetToken(email, resetToken);
+    if (!validUser) {
+      log.warn('authController', `Invalid or expired reset token for: ${email}`);
+      return res.status(400).json({ error: 'Invalid or expired reset session. Please request OTP again.' });
+    }
+
+    log.step('authController', '3', 'Hashing new password');
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Update password in DB
-    log.step('authController', '3', 'Updating password in DB');
-    const user = await updatePassword(email, hashedPassword);
-    if (!user) {
-      log.warn('authController', `User not found for reset: ${email}`);
-      return res.status(404).json({ error: 'User not found.' });
-    }
+    log.step('authController', '4', 'Updating password in DB');
+    await updatePassword(email, hashedPassword);
+
+    // Clear reset token so it can't be reused
+    await clearResetToken(email);
 
     log.success('authController', `Password reset for: ${email}`);
     res.status(200).json({ message: 'Password reset successfully. You can now login.' });

@@ -78,7 +78,12 @@ await pool.query(`
   );
 `);
 console.log('✓ chat_messages table created');
-
+await pool.query(`
+  ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP;
+`);
+console.log('✓ reset_token columns added to users table');
     process.exit(0);
   } catch (err) {
     console.error('Migration failed:', err.message);

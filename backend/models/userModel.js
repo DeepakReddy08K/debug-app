@@ -1,5 +1,7 @@
 import pool from '../config/db.js';
 import log from '../config/logger.js';
+import crypto from 'crypto';
+
 
 // Create a new user (traditional registration)
 export const createUser = async (name, email, hashedPassword, verificationToken) => {
@@ -22,15 +24,7 @@ export const findByEmail = async (email) => {
   return result.rows[0] || null;
 };
 
-// Find user by ID
-export const findById = async (id) => {
-  log.step('userModel', '3', `Finding user by id: ${id}`);
-  const result = await pool.query(
-    `SELECT id, name, email, is_verified, avatar_url FROM users WHERE id = $1`,
-    [id]
-  );
-  return result.rows[0] || null;
-};
+
 // Delete unverified user if they decline
 export const deleteUnverifiedUser = async (token) => {
   log.step('userModel', '6', 'Deleting unverified user');
@@ -78,6 +72,16 @@ if (existing.rows[0]) {
   return result.rows[0];
 };
 
+// Find user by ID
+export const findById = async (id) => {
+  log.step('userModel', '3', `Finding user by id: ${id}`);
+  const result = await pool.query(
+    `SELECT id, name, email, is_verified, avatar_url FROM users WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0] || null;
+};
+
 // Save OTP and expiry to user
 export const saveOTP = async (email, otp) => {
   log.step('userModel', '7', `Saving OTP for: ${email}`);
@@ -90,6 +94,7 @@ export const saveOTP = async (email, otp) => {
 };
 
 // Verify OTP and clear it
+// Verify OTP, clear it, and issue a one-time reset token
 export const verifyOTP = async (email, otp) => {
   log.step('userModel', '8', `Verifying OTP for: ${email}`);
   const result = await pool.query(
@@ -98,12 +103,15 @@ export const verifyOTP = async (email, otp) => {
   );
   if (!result.rows[0]) return null;
 
-  // Clear OTP after successful verification
+  // Generate one-time reset token valid for 10 minutes
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const resetTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
+
   await pool.query(
-    `UPDATE users SET otp = NULL, otp_expires = NULL WHERE email = $1`,
-    [email]
+    `UPDATE users SET otp = NULL, otp_expires = NULL, reset_token = $1, reset_token_expires = $2 WHERE email = $3`,
+    [resetToken, resetTokenExpires, email]
   );
-  return result.rows[0];
+  return { id: result.rows[0].id, email: result.rows[0].email, resetToken };
 };
 
 // Update password
@@ -115,3 +123,24 @@ export const updatePassword = async (email, hashedPassword) => {
   );
   return result.rows[0] || null;
 };
+
+// Verify reset token and clear it (used right before password update)
+export const verifyResetToken = async (email, resetToken) => {
+  log.step('userModel', '10', `Verifying reset token for: ${email}`);
+  const result = await pool.query(
+    `SELECT * FROM users WHERE email = $1 AND reset_token = $2 AND reset_token_expires > NOW()`,
+    [email, resetToken]
+  );
+  return result.rows[0] || null;
+};
+
+// Clear reset token after successful password update
+export const clearResetToken = async (email) => {
+  log.step('userModel', '11', `Clearing reset token for: ${email}`);
+  await pool.query(
+    `UPDATE users SET reset_token = NULL, reset_token_expires = NULL WHERE email = $1`,
+    [email]
+  );
+};
+
+
