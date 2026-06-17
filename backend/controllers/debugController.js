@@ -7,6 +7,11 @@ import { updateSyntaxCheck } from '../models/runModel.js';
 //branch 2b
 import { getRunById } from '../models/runModel.js';
 import { saveTestCases } from '../models/testCaseModel.js';
+//branch 2c
+import { submitBatch, pollUntilComplete, JUDGE0_LANGUAGE_IDS } from '../config/judge0Client.js';
+import { runCodeSync, runBatchWithConcurrencyLimit } from '../config/compilerClient.js';
+import { getTestCasesByRun } from '../models/testCaseModel.js';
+import { updateTestCaseResult } from '../models/testCaseModel.js';
 //for consoling logs
 import log from '../config/logger.js';
 //to fix common ai-generated json issues
@@ -18,8 +23,8 @@ import { jsonrepair } from 'jsonrepair';
 const detectLanguage = (code) => {
   if (/#include|using namespace|int main|cout|cin/.test(code)) return 'cpp';
   if (/import java|public class|System\.out/.test(code)) return 'java';
-  if (/^def |^import |print\(|input\(/.test(code)) return 'python';
   if (/console\.log|function |const |let |=>/.test(code)) return 'javascript';
+  if (/^def |^import |print\(|input\(/.test(code)) return 'python';
   return 'cpp';
 };
 
@@ -286,5 +291,123 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
   } catch (err) {
     log.error('debugController', 'Branch 2b failed', err);
     res.status(500).json({ error: 'Test case generation failed. Please try again.' });
+  }
+};
+
+
+
+//branch 2c
+// Helper — build Judge0 batch submissions for all test cases (buggy + correct)
+const buildJudge0Submissions = (testCases, buggyCode, correctCode, language) => {
+  const languageId = JUDGE0_LANGUAGE_IDS[language] || JUDGE0_LANGUAGE_IDS.cpp;
+  const submissions = [];
+  for (const tc of testCases) {
+    submissions.push({ source_code: buggyCode, language_id: languageId, stdin: tc.input_data });
+    submissions.push({ source_code: correctCode, language_id: languageId, stdin: tc.input_data });
+  }
+  return submissions;
+};
+
+// Helper — run via OnlineCompiler.io fallback, stop at first failing test
+const runWithOnlineCompilerFallback = async (testCases, buggyCode, correctCode, language) => {
+  const results = [];
+  for (const tc of testCases) {
+    const buggyResult = await runCodeSync(buggyCode, tc.input_data, language);
+    const correctResult = await runCodeSync(correctCode, tc.input_data, language);
+    results.push({ testCase: tc, buggyResult, correctResult });
+
+    const isFailing = (buggyResult.output || '').trim() !== (correctResult.output || '').trim();
+    if (isFailing) {
+      log.warn('debugController', `Failing test found via fallback: ${tc.id}`);
+      break; // stop early on first failure
+    }
+  }
+  return results;
+};
+
+// Branch 2c — Execute test cases on Judge0 (with OnlineCompiler.io fallback)
+export const executeTestCases = async (req, res) => {
+  log.step('debugController', '1', 'Branch 2c: execute-code started');
+  const { runId } = req.body;
+
+  try {
+    if (!runId) {
+      log.warn('debugController', 'Missing runId in executeTestCases request');
+      return res.status(400).json({ error: 'runId is required.' });
+    }
+
+    log.step('debugController', '2', 'Fetching run and test cases from DB');
+    const run = await getRunById(runId);
+    if (!run) {
+      log.warn('debugController', `Run not found: ${runId}`);
+      return res.status(404).json({ error: 'Run not found.' });
+    }
+
+    const testCases = await getTestCasesByRun(runId);
+    if (!testCases.length) {
+      log.warn('debugController', `No test cases found for run: ${runId}`);
+      return res.status(404).json({ error: 'No test cases found. Run Branch 2b first.' });
+    }
+
+    // Only process the latest batch
+    const latestBatch = Math.max(...testCases.map(tc => tc.batch_number));
+    const batchTestCases = testCases.filter(tc => tc.batch_number === latestBatch);
+
+    let failingTest = null;
+    let usedFallback = false;
+
+    try {
+      log.step('debugController', '3', 'Attempting Judge0 batch execution');
+      const submissions = buildJudge0Submissions(batchTestCases, run.buggy_code, run.correct_code, run.language);
+      const batchResponse = await submitBatch(submissions);
+      const tokens = batchResponse.map(r => r.token);
+      const results = await pollUntilComplete(tokens);
+
+      // Results come in pairs: [buggy0, correct0, buggy1, correct1, ...]
+      for (let i = 0; i < batchTestCases.length; i++) {
+        const tc = batchTestCases[i];
+        const buggyResult = results[i * 2];
+        const correctResult = results[i * 2 + 1];
+        const buggyOutput = (buggyResult.stdout || buggyResult.compile_output || buggyResult.stderr || '').trim();
+        const correctOutput = (correctResult.stdout || '').trim();
+        const isFailing = buggyOutput !== correctOutput;
+
+        await updateTestCaseResult(tc.id, buggyOutput, correctOutput, isFailing);
+
+        if (isFailing && !failingTest) {
+          failingTest = { input: tc.input_data, buggyOutput, correctOutput };
+        }
+      }
+      log.success('debugController', 'Judge0 batch execution successful');
+
+    } catch (judge0Err) {
+      log.warn('debugController', 'Judge0 failed, falling back to OnlineCompiler.io', judge0Err.message);
+      usedFallback = true;
+
+      const fallbackResults = await runWithOnlineCompilerFallback(batchTestCases, run.buggy_code, run.correct_code, run.language);
+      for (const r of fallbackResults) {
+        const buggyOutput = (r.buggyResult.output || r.buggyResult.error || '').trim();
+        const correctOutput = (r.correctResult.output || '').trim();
+        const isFailing = buggyOutput !== correctOutput;
+
+        await updateTestCaseResult(r.testCase.id, buggyOutput, correctOutput, isFailing);
+
+        if (isFailing && !failingTest) {
+          failingTest = { input: r.testCase.input_data, buggyOutput, correctOutput };
+        }
+      }
+    }
+
+    log.success('debugController', `Branch 2c completed for run: ${runId}, fallback used: ${usedFallback}`);
+    res.status(200).json({
+      runId,
+      failingTest,
+      usedFallback,
+      message: failingTest ? 'Failing test case found.' : 'No failing test case in this batch.',
+    });
+
+  } catch (err) {
+    log.error('debugController', 'Branch 2c failed', err);
+    res.status(500).json({ error: 'Code execution failed. Please try again.' });
   }
 };
