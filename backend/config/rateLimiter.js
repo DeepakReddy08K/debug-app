@@ -50,3 +50,15 @@ export const executionLimiter = rateLimit({
     res.status(429).json({ error: 'Execution limit reached. Try again in an hour.' });
   },
 });
+
+//ai chat limiter
+export const chatLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 15, // 15 requests per IP per hour
+  message: 'Too many chat messages. Please wait before sending more.',
+  handler: (req, res) => {
+    log.warn('rateLimiter', 'Chat limiter hit', `IP: ${req.ip}`);
+    res.status(429).json({ error: 'Too many chat messages. Please wait an hour before sending more.' });
+  },
+  keyGenerator: (req) => req.ip,
+});
