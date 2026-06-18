@@ -1,3 +1,5 @@
+//Failover logic      
+//Judge0 extra ce (paid very limited free) ---> judge public(free,no api key)----> onlinecompiler.io(api key)
 import axios from 'axios';
 import log from './logger.js';
 import dotenv from 'dotenv';
