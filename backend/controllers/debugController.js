@@ -611,3 +611,53 @@ export const runFullPipeline = async (req, res) => {
     res.status(500).json({ error: err.message || 'Pipeline failed. Please try again.' });
   }
 };
+
+
+//Run single test
+
+// Run Single Test — user provides manual input, run both codes via OnlineCompiler.io, compare
+export const runSingleTest = async (req, res) => {
+  log.step('debugController', '1', 'Run single test started');
+  const { buggyCode, correctCode, input } = req.body;
+
+  try {
+    if (!buggyCode || !correctCode || input === undefined) {
+      log.warn('debugController', 'Missing fields in runSingleTest request');
+      return res.status(400).json({ error: 'buggyCode, correctCode and input are required.' });
+    }
+
+    log.step('debugController', '2', 'Detecting language and structure');
+    const language = detectLanguage(buggyCode) || detectLanguage(correctCode);
+    const classBased = isClassBased(buggyCode) || isClassBased(correctCode);
+
+    if (classBased) {
+      log.warn('debugController', 'Class-based code detected, not yet supported for single test run');
+      return res.status(400).json({ error: 'Class-based (LeetCode style) code support is coming soon. Please use full main()-based code for now.' });
+    }
+
+    log.step('debugController', '3', 'Running buggy code');
+    const buggyResult = await runCodeSync(buggyCode, input, language);
+
+    log.step('debugController', '4', 'Running correct code');
+    const correctResult = await runCodeSync(correctCode, input, language);
+
+    const buggyOutput = (buggyResult.output || buggyResult.error || '').trim();
+    const correctOutput = (correctResult.output || '').trim();
+    const isMatching = buggyOutput === correctOutput;
+
+    log.success('debugController', `Run single test completed, matching: ${isMatching}`);
+    res.status(200).json({
+      input,
+      language,
+      buggyOutput,
+      correctOutput,
+      isMatching,
+      buggyDetails: buggyResult,
+      correctDetails: correctResult,
+    });
+
+  } catch (err) {
+    log.error('debugController', 'Run single test failed', err);
+    res.status(500).json({ error: err.message || 'Code execution failed. Please try again.' });
+  }
+};
