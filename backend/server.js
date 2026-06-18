@@ -13,6 +13,7 @@ import pool from './config/db.js';
 import debugRoutes from './routes/debug.js';
 import log from './config/logger.js';
 import { generalLimiter } from './config/rateLimiter.js';
+import chatRoutes from './routes/chat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,7 +67,7 @@ app.get('/', (req, res) => {
 // Routes mounted here as we build them
 app.use('/api/auth', authRoutes);
 app.use('/api/debug', debugRoutes);
-// app.use('/api/chat', chatRoutes);
+ app.use('/api/chat', chatRoutes);
 // app.use('/api/history', historyRoutes);
 
 const PORT = process.env.PORT || 5000;

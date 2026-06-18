@@ -13,8 +13,26 @@ export const saveMessage = async (runId, userId, role, content) => {
 };
 
 // Get all messages for a run (full conversation history)
-export const getMessagesByRun = async (runId) => {
-  log.step('chatModel', '2', `Getting messages for run: ${runId}`);
+// Get last N messages for a run (used in chat context, default 8, chronological order)
+export const getMessagesByRun = async (runId, limit = 8) => {
+  log.step('chatModel', '2', `Getting last ${limit} messages for run: ${runId}`);
+  const result = await pool.query(
+    `SELECT id, role, content, created_at 
+     FROM (
+       SELECT id, role, content, created_at 
+       FROM chat_messages WHERE run_id = $1 
+       ORDER BY created_at DESC 
+       LIMIT $2
+     ) sub
+     ORDER BY created_at ASC`,
+    [runId, limit]
+  );
+  return result.rows;
+};
+
+// Get ALL messages for a run (used in History page, full conversation)
+export const getAllMessagesByRun = async (runId) => {
+  log.step('chatModel', '3', `Getting all messages for run: ${runId}`);
   const result = await pool.query(
     `SELECT id, role, content, created_at 
      FROM chat_messages WHERE run_id = $1 

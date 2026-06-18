@@ -1,6 +1,6 @@
 // Rate limiting — prevents abuse and reduces load on AI and Judge0 services
 
-import rateLimit from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import log from './logger.js';
 
 // General API — applied to all routes in server.js
@@ -54,11 +54,11 @@ export const executionLimiter = rateLimit({
 //ai chat limiter
 export const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 15, // 15 requests per IP per hour
+  max: 15,
   message: 'Too many chat messages. Please wait before sending more.',
   handler: (req, res) => {
     log.warn('rateLimiter', 'Chat limiter hit', `IP: ${req.ip}`);
     res.status(429).json({ error: 'Too many chat messages. Please wait an hour before sending more.' });
   },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
 });
