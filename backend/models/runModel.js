@@ -68,15 +68,29 @@ export const getRunById = async (runId) => {
   return result.rows[0] || null;
 };
 
-// Get runs for a user from last 1 month
+// Get all runs for a user (last 3 months) with test case counts and verdict
 export const getRunsByUser = async (userId) => {
   log.step('runModel', '7', `Getting runs for user: ${userId}`);
   const result = await pool.query(
-    `SELECT id, language, is_class_based, status, ai_diagnosis, failing_input,
-     output_buggy, output_correct, created_at 
-     FROM runs WHERE user_id = $1 
-     AND created_at >= NOW() - INTERVAL '1 month'
-     ORDER BY created_at DESC`,
+    `SELECT 
+      r.id,
+      r.language,
+      r.is_class_based,
+      r.status,
+      r.failing_input,
+      r.output_buggy,
+      r.output_correct,
+      r.ai_diagnosis,
+      r.created_at,
+      LEFT(r.buggy_code, 100) AS code_preview,
+      COUNT(tc.id) AS total_tests,
+      COUNT(CASE WHEN tc.is_failing = true THEN 1 END) AS failing_tests
+    FROM runs r
+    LEFT JOIN test_cases tc ON tc.run_id = r.id
+    WHERE r.user_id = $1
+      AND r.created_at > NOW() - INTERVAL '3 months'
+    GROUP BY r.id
+    ORDER BY r.created_at DESC`,
     [userId]
   );
   return result.rows;

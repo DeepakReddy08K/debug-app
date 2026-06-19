@@ -1,5 +1,5 @@
 import express from 'express';
-import { chatAboutRun } from '../controllers/debugController.js';
+import { chatAboutRun } from '../controllers/chatController.js';
 import { isAuthenticated } from '../middleware/authMiddleware.js';
 import { chatLimiter } from '../config/rateLimiter.js';
 
