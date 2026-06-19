@@ -15,7 +15,7 @@ import log from './config/logger.js';
 import { generalLimiter } from './config/rateLimiter.js';
 import chatRoutes from './routes/chat.js';
 import historyRoutes from './routes/history.js';
-
+import { errorHandler } from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +72,8 @@ app.use('/api/debug', debugRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/history', historyRoutes);
 
+//errorhandler middleware
+app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   log.success('server', `Server running on port ${PORT}`);
