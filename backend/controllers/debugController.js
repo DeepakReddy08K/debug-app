@@ -664,11 +664,10 @@ export const runSingleTest = async (req, res) => {
 };
 
 //ai chat feature
-
 // AI Chat — context-aware chat about a specific run OR provided code
 export const chatAboutRun = async (req, res) => {
   log.step('debugController', '1', 'AI chat started');
-  const { runId, message, buggyCode, correctCode } = req.body;
+  const { runId, message, buggyCode, correctCode, conversationHistory = [] } = req.body;
   const userId = req.session.userId;
 
   try {
@@ -695,7 +694,13 @@ export const chatAboutRun = async (req, res) => {
     }
 
     log.step('debugController', '3', 'Building chat context');
-    const conversationHistory = previousMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
+
+    // If runId exists use DB messages, otherwise use frontend-provided history
+    const historyToUse = (runId && run)
+      ? previousMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      : conversationHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`);
+
+    const conversationHistoryText = historyToUse.join('\n');
 
     const codeContext = contextBuggyCode || contextCorrectCode
       ? `${contextBuggyCode ? `Buggy Code:\n${contextBuggyCode}\n` : ''}${contextCorrectCode ? `Correct Code:\n${contextCorrectCode}` : ''}`
@@ -707,8 +712,8 @@ ${codeContext}
 
 ${run && run.ai_diagnosis ? `AI Diagnosis from this session:\n${JSON.stringify(run.ai_diagnosis, null, 2)}\n` : ''}
 
-Previous conversation (most recent ${previousMessages.length} messages):
-${conversationHistory || '(This is the start of the conversation)'}
+Previous conversation (most recent messages):
+${conversationHistoryText || '(This is the start of the conversation)'}
 
 User's question:
 ${message}
