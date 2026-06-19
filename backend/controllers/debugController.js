@@ -102,9 +102,19 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
 
 Include at least 5-8 categories covering: small/trivial cases, boundary values, large stress test, and any category that specifically targets the suspected bug by comparing the buggy and correct code logic.`;
 
-  log.step('debugController', '5', 'Calling Nemotron for analysis');
-  const aiResponse = await callNemotron(prompt);
+// Retry up to 2 times if AI returns empty response
+  const MAX_AI_RETRIES = 2;
+  let aiResponse = '';
+  for (let attempt = 1; attempt <= MAX_AI_RETRIES; attempt++) {
+    log.step('debugController', '5', `Calling Nemotron for analysis (attempt ${attempt})`);
+    aiResponse = await callNemotron(prompt);
+    if (aiResponse && aiResponse.trim().length > 0) break;
+    log.warn('debugController', `Nemotron returned empty response on attempt ${attempt}, retrying...`);
+  }
 
+  if (!aiResponse || aiResponse.trim().length === 0) {
+    throw new Error('Nemotron returned empty response after retries in Branch 1.');
+  }
   log.step('debugController', '6', 'Parsing AI response');
   let cleanResponse = aiResponse.replace(/```json\n?|```\n?/g, '').trim();
   cleanResponse = cleanResponse.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -255,8 +265,19 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
   "generation_notes": "one line note"
 }`;
 
-  log.step('debugController', '4', 'Calling Nemotron for test case generation');
-  const aiResponse = await callNemotron(prompt);
+  // Retry up to 2 times if AI returns empty response
+  const MAX_AI_RETRIES = 2;
+  let aiResponse = '';
+  for (let attempt = 1; attempt <= MAX_AI_RETRIES; attempt++) {
+    log.step('debugController', '4', `Calling Nemotron for test case generation (attempt ${attempt})`);
+    aiResponse = await callNemotron(prompt);
+    if (aiResponse && aiResponse.trim().length > 0) break;
+    log.warn('debugController', `Nemotron returned empty response on attempt ${attempt}, retrying...`);
+  }
+
+  if (!aiResponse || aiResponse.trim().length === 0) {
+    throw new Error('Nemotron returned empty response after retries in Branch 2b.');
+  }
 
   log.step('debugController', '5', 'Parsing AI response');
   let cleanResponse = aiResponse.replace(/```json\n?|```\n?/g, '').trim();
@@ -284,7 +305,6 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
   log.success('debugController', `Branch 2b completed for run: ${runId}, batch: ${batchNumber}`);
   return { batchNumber, testCases: result.test_cases, savedIds: savedCases.map(sc => sc.id) };
 };
-
 // Branch 2b — Route handler
 export const generateTestCases = async (req, res) => {
   log.step('debugController', '1', 'Branch 2b: generate-test-cases started');
