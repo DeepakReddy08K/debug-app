@@ -6,7 +6,7 @@ import path from 'path';
 import authRoutes from './routes/auth.js';//routes
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
-import cookieParser from 'cookie-parser';
+//import cookieParser from 'cookie-parser';
 import passport from './config/passport.js';
 import './config/db.js';
 import pool from './config/db.js';
@@ -25,7 +25,7 @@ const app = express();
 const PgSession = connectPgSimple(session);
 
 // Parse cookies
-app.use(cookieParser());
+//app.use(cookieParser());
 
 // Allow frontend to talk to backend with credentials
 app.use(cors({

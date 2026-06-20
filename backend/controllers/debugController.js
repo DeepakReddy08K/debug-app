@@ -15,6 +15,8 @@ import { updateTestCaseResult } from '../models/testCaseModel.js';
 //branch 3
 import { updateDiagnosis } from '../models/runModel.js';
 import { getFailingTestCases } from '../models/testCaseModel.js';
+//updating run status
+import { updateRunStatus } from '../models/runModel.js';
 //for consoling logs
 import log from '../config/logger.js';
 //to fix common ai-generated json issues
@@ -575,15 +577,25 @@ export const runFullPipeline = async (req, res) => {
   const { buggyCode, correctCode, additionalInfo } = req.body;
   const userId = req.session.userId;
   const MAX_BATCHES = 3; // total batches including first attempt
-
+  let run_id=null;
   try {
     if (!buggyCode || !correctCode) {
       return res.status(400).json({ error: 'Both buggy and correct code are required.' });
     }
 
+// Input length validation
+    if (buggyCode.length > 50000 || correctCode.length > 50000) {
+      return res.status(400).json({ error: 'Code exceeds maximum allowed length of 50,000 characters.' });
+    }
+
+    if (additionalInfo && additionalInfo.length > 1000) {
+      return res.status(400).json({ error: 'Additional info exceeds maximum allowed length of 1,000 characters.' });
+    }
+
     // ---- BRANCH 1 ----
     log.step('debugController', '2', 'Pipeline: Branch 1 starting');
     const { runId, run, schema } = await analyzeProblemLogic(userId, buggyCode, correctCode, additionalInfo);
+    run_id=runId;
     log.success('debugController', 'Pipeline: Branch 1 done');
 
     // ---- BRANCH 2a ----
@@ -627,6 +639,9 @@ export const runFullPipeline = async (req, res) => {
 
   } catch (err) {
     log.error('debugController', 'Full pipeline failed', err);
+    if(run_id){
+      await updateRunStatus(run_id,'failed').catch((err)=>{log.error('debugController','Failed to update the run status in database',err)});
+    }
     res.status(500).json({ error: err.message || 'Pipeline failed. Please try again.' });
   }
 };
