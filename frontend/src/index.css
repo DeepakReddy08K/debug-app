@@ -19,3 +19,22 @@ body {
   color: var(--text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 991px) {
+  .col-12.col-lg-6.d-flex {
+    padding-top: 40px;
+    padding-bottom: 40px;
+  }
+}
+
+@media (max-width: 576px) {
+  .cf-card {
+    padding: 12px;
+  }
+  
+  .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
