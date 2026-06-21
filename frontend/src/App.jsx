@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import History from './pages/History';
 import HistoryDetail from './pages/HistoryDetail';
 import ProtectedRoute from './components/ProtectedRoute';
+import Layout from './components/Layout';
 
 function App() {
   return (
@@ -24,9 +25,21 @@ function App() {
         <Route path="/about" element={<About />} />
 
         {/* Protected routes */}
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-        <Route path="/history/:id" element={<ProtectedRoute><HistoryDetail /></ProtectedRoute>} />
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Layout><Dashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/history" element={
+          <ProtectedRoute>
+            <Layout><History /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/history/:id" element={
+          <ProtectedRoute>
+            <Layout><HistoryDetail /></Layout>
+          </ProtectedRoute>
+        } />
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
