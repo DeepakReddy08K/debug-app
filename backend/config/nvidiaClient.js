@@ -49,7 +49,7 @@ export const callNemotron = async (prompt, maxTokens = 16384) => {
         temperature: 1,
         top_p: 1,
         max_tokens: maxTokens,
-        extra_body: { reasoning_budget: 16384 },
+        //extra_body: { reasoning_budget: 16384 }, //nvidia changed the request pattern and extra body is no longer accepting
         stream: true,
       },
       {
@@ -60,8 +60,12 @@ export const callNemotron = async (prompt, maxTokens = 16384) => {
 
     return new Promise((resolve, reject) => {
       let fullContent = '';
+      let rawBuffer = ''; // collect everything for error debugging
+
       response.data.on('data', (chunk) => {
-        const lines = chunk.toString().split('\n').filter(line => line.trim().startsWith('data:'));
+        const chunkStr = chunk.toString();
+        rawBuffer += chunkStr;
+        const lines = chunkStr.split('\n').filter(line => line.trim().startsWith('data:'));
         for (const line of lines) {
           const data = line.replace('data: ', '').trim();
           if (data === '[DONE]') continue;
@@ -75,6 +79,9 @@ export const callNemotron = async (prompt, maxTokens = 16384) => {
         }
       });
       response.data.on('end', () => {
+        if (!fullContent && rawBuffer) {
+          log.error('nvidiaClient', 'Nemotron returned empty content, raw response:', rawBuffer.slice(0, 500));
+        }
         log.success('nvidiaClient', 'Nemotron stream completed');
         resolve(fullContent);
       });
@@ -85,7 +92,22 @@ export const callNemotron = async (prompt, maxTokens = 16384) => {
     });
 
   } catch (err) {
-    log.error('nvidiaClient', 'Nemotron call failed', err.response?.data || err);
+    // For streaming errors, read the response body properly
+    if (err.response) {
+      const status = err.response.status;
+      let errorBody = '';
+      try {
+        await new Promise((resolve) => {
+          err.response.data.on('data', chunk => errorBody += chunk.toString());
+          err.response.data.on('end', resolve);
+        });
+      } catch (e) {
+        errorBody = 'Could not read error body';
+      }
+      log.error('nvidiaClient', `Nemotron HTTP ${status} error body:`, errorBody);
+    } else {
+      log.error('nvidiaClient', 'Nemotron call failed', err.message);
+    }
     throw new Error('AI request failed (Nemotron)');
   }
 };
