@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Bug, Zap, Play, Code, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { loginUser } from '../services/auth';
+import { useAuth } from '../context/AuthContext';
 const Login = () => {
   const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { setUser } = useAuth();
 
 const navigate = useNavigate();
 
@@ -18,7 +20,8 @@ const handleSubmit = async (e) => {
   setError('');
   setLoading(true);
   try {
-    await loginUser(email, password);
+    const res = await loginUser(email, password);
+    setUser(res.data.user);
     navigate('/');
   } catch (err) {
     setError(err.response?.data?.error || 'Login failed. Please try again.');
