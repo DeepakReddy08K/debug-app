@@ -1,40 +1,44 @@
-/* Force CSS variables to apply on html and body */
-html, html[data-theme="light"] {
-  background-color: #ffffff;
-  color: #212529;
+/* ===== LIGHT THEME ===== */
+:root,
+html[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --navbar-bg: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #57606a;
+  --text-muted: #8b949e;
+  --border-color: #d0d7de;
+  --accent: #0969da;
+  --accent-hover: #0860ca;
+  --danger: #cf222e;
+  --success: #1a7f37;
 }
 
+/* ===== DARK THEME ===== */
 html[data-theme="dark"] {
-  background-color: #1a1a1a;
-  color: #e0e0e0;
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --navbar-bg: #161b22;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --border-color: #30363d;
+  --accent: #58a6ff;
+  --accent-hover: #79b8ff;
+  --danger: #f85149;
+  --success: #3fb950;
 }
 
-html[data-theme="dark"] body {
-  background-color: #1a1a1a;
-  color: #e0e0e0;
-}
-
-body {
+/* ===== BASE ===== */
+html, body {
+  margin: 0;
+  padding: 0;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* ===== RESPONSIVE ===== */
-@media (max-width: 991px) {
-  .col-12.col-lg-6.d-flex {
-    padding-top: 40px;
-    padding-bottom: 40px;
-  }
-}
-
-@media (max-width: 576px) {
-  .cf-card {
-    padding: 12px;
-  }
-  
-  .container {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-}
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }

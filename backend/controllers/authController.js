@@ -250,7 +250,7 @@ export const googleCallback = async (req, res) => {
     req.session.email = req.user.email;
 
     log.success('authController', `Google user session created: ${req.user.email}`);
-    res.redirect(`${process.env.CLIENT_URL}/dashboard?login=success`);
+    res.redirect(`${process.env.CLIENT_URL}/`);
 
   } catch (err) {
     log.error('authController', 'Google callback failed', err);
