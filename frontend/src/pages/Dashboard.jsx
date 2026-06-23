@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Search, FlaskConical, MessageCircle, X, Send, HelpCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { Search, FlaskConical, MessageCircle, X, Send, HelpCircle, CheckCircle, AlertCircle, Bot, User, Loader2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { useTheme } from '../context/ThemeContext';
 import { runFullPipeline, runSingleTest } from '../services/debug';
+import { sendChatMessage } from '../services/chat';
 
 const Dashboard = () => {
   const { theme } = useTheme();
@@ -22,6 +23,8 @@ const Dashboard = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
   const [toasts, setToasts] = useState([]);
 
   const showToast = (message, type = 'success') => {
@@ -97,11 +100,27 @@ const Dashboard = () => {
     }
   };
 
-  const handleSendChat = () => {
-    if (!chatInput.trim()) return;
-    setChatMessages(prev => [...prev, { role: 'user', content: chatInput }]);
-    setChatInput('');
-  };
+  const handleSendChat = async () => {
+  if (!chatInput.trim() || chatLoading) return;
+  const userMessage = chatInput;
+  setChatInput('');
+  setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+  setChatLoading(true);
+
+  try {
+    const res = await sendChatMessage(
+      userMessage,
+      userCode,
+      correctCode,
+      chatMessages,
+    );
+    setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.assistantResponse }]);
+  } catch (err) {
+    setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
+  } finally {
+    setChatLoading(false);
+  }
+};
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-primary)' }}>
@@ -186,8 +205,17 @@ const Dashboard = () => {
                 opacity: loading ? 0.7 : 1,
               }}
             >
-              <Search size={14} />
-              {loading ? progressStep || 'Running...' : 'Find Failing Test Case'}
+              {loading ? (
+                  <>
+                  <span className="cf-spinner"></span>
+                  Processing...
+                  </>
+                  ) : (
+                  <>
+                  <Search size={14} />
+                  Find Failing Test Case
+                  </>
+            )}
             </button>
             <div className="mt-1">
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>AI auto-detects language and input format</span>
@@ -456,24 +484,60 @@ const Dashboard = () => {
               <X size={14} />
             </button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {chatMessages.length === 0 && (
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px' }}>
-                Ask anything about your bug or code.
-              </p>
-            )}
-            {chatMessages.map((msg, i) => (
-              <div key={i} style={{
-                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
-                color: msg.role === 'user' ? '#ffffff' : 'var(--text-primary)',
-                padding: '7px 10px', borderRadius: '6px',
-                fontSize: '12px', maxWidth: '80%', lineHeight: '1.5',
-              }}>
-                {msg.content}
-              </div>
-            ))}
-          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+  {chatMessages.length === 0 && (
+    <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px' }}>
+      Ask anything about your bug or code.
+    </p>
+  )}
+  {chatMessages.map((msg, i) => (
+    <div key={i} className="d-flex align-items-start gap-2" style={{ flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+      {/* Icon */}
+      <div style={{
+        width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+        backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+        border: '1px solid var(--border-color)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {msg.role === 'user'
+          ? <User size={12} color="#ffffff" />
+          : <Bot size={12} color="var(--text-secondary)" />
+        }
+      </div>
+      {/* Bubble */}
+      <div style={{
+        backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+        color: msg.role === 'user' ? '#ffffff' : 'var(--text-primary)',
+        padding: '7px 10px', borderRadius: '6px',
+        fontSize: '12px', maxWidth: '75%', lineHeight: '1.5',
+        border: '1px solid var(--border-color)',
+      }}>
+        {msg.content}
+      </div>
+    </div>
+  ))}
+
+  {/* AI loading indicator */}
+  {chatLoading && (
+    <div className="d-flex align-items-start gap-2">
+      <div style={{
+        width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+        backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Bot size={12} color="var(--text-secondary)" />
+      </div>
+      <div style={{
+        backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+        padding: '7px 12px', borderRadius: '6px',
+        display: 'flex', alignItems: 'center', gap: '6px',
+      }}>
+        <Loader2 size={12} color="var(--text-muted)" style={{ animation: 'spin 0.7s linear infinite' }} />
+        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Thinking...</span>
+      </div>
+    </div>
+  )}
+</div>
           <div className="d-flex gap-2 p-2" style={{ borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
             <input
               type="text"
@@ -489,13 +553,16 @@ const Dashboard = () => {
             />
             <button
               onClick={handleSendChat}
+              disabled={chatLoading}
               style={{
-                background: '#22c55e', border: 'none', borderRadius: '4px',
-                padding: '6px 10px', cursor: 'pointer', color: '#ffffff',
+                background: chatLoading ? 'var(--bg-secondary)' : '#22c55e',
+                border: 'none', borderRadius: '4px',
+                padding: '6px 10px', cursor: chatLoading ? 'not-allowed' : 'pointer',
+                color: chatLoading ? 'var(--text-muted)' : '#ffffff',
                 display: 'flex', alignItems: 'center',
-              }}
+            }}
             >
-              <Send size={13} />
+            <Send size={13} />
             </button>
           </div>
         </div>

@@ -44,7 +44,7 @@ export const chatAboutRun = async (req, res) => {
       ? `${contextBuggyCode ? `Buggy Code:\n${contextBuggyCode}\n` : ''}${contextCorrectCode ? `Correct Code:\n${contextCorrectCode}` : ''}`
       : '(No code provided)';
 
-    const prompt = `You are a helpful debugging assistant for competitive programming. Help the user understand code issues, algorithm concepts, and debugging strategies.
+    const prompt = `You are a helpful debugging assistant for competitive programming. Help the user understand code issues, algorithm concepts, and debugging strategies. unless user asks lengthy code just give response in 15 to 20 words shortly and make sure if user gives out normal messages give right answer like if he says hi! respond like Hi ! how is your day any debugging help etc..
 
 ${codeContext}
 
