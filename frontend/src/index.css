@@ -42,3 +42,28 @@ html, body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
 ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+/* ===== DASHBOARD EDITORS ===== */
+.editor-row {
+  height: clamp(300px, 50vh, 560px);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.editor-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+@media (max-width: 767px) {
+  .editor-row {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .editor-col {
+    height: 260px !important;
+    min-height: 260px !important;
+    max-height: 260px !important;
+  }
+}

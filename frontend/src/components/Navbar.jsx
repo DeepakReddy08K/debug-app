@@ -1,94 +1,63 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, User, LogOut, History, Home } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bug, History, Sun, Moon, LogOut } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+
 const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    try {
-      await axios.post('/api/auth/logout', {}, { withCredentials: true });
-    navigate('/login');
-    } catch (err) {
-      console.error('Logout failed', err);
-    }
-  };
+  const { user, logout } = useAuth();
 
   return (
-    <nav className="cf-navbar d-flex align-items-center justify-content-between">
-      {/* Left — Brand */}
-      <div className="d-flex align-items-center gap-3">
-        <Link to="/" className="cf-navbar-brand">
-          Debug App
-        </Link>
-        <Link to="/" className="cf-nav-link d-none d-md-block">
-          <Home size={14} className="me-1" />
-          Home
-        </Link>
-        <Link to="/history" className="cf-nav-link d-none d-md-block">
-          <History size={14} className="me-1" />
-          History
-        </Link>
-        <Link to="/about" className="cf-nav-link d-none d-md-block">
-          About
-        </Link>
+    <div
+      className="d-flex align-items-center justify-content-between px-3"
+      style={{
+        height: '44px',
+        backgroundColor: 'var(--navbar-bg)',
+        borderBottom: '1px solid var(--border-color)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+      }}
+    >
+      {/* Left — logo */}
+      <div className="d-flex align-items-center gap-2">
+        <Bug size={16} color="var(--accent)" />
+        <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Debug</span>
+        <span style={{
+          fontSize: '10px', fontWeight: 600, padding: '1px 6px',
+          border: '1px solid var(--border-color)', borderRadius: '3px',
+          color: 'var(--text-muted)', letterSpacing: '0.5px'
+        }}>BETA</span>
       </div>
 
-      {/* Right — Theme toggle + user */}
+      {/* Right — links + user + logout */}
       <div className="d-flex align-items-center gap-2">
-        {/* Theme toggle */}
+        <Link to="/about" style={{ fontSize: '13px', color: 'var(--text-secondary)', textDecoration: 'none' }}>About</Link>
+        <Link to="/history" className="d-flex align-items-center gap-1" style={{ fontSize: '13px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+          <History size={13} />
+          <span className="d-none d-sm-inline">History</span>
+        </Link>
         <button
-          className="cf-btn cf-btn-secondary d-flex align-items-center"
           onClick={toggleTheme}
-          title="Toggle theme"
+          style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: 'var(--text-secondary)' }}
         >
           {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
         </button>
-
-        {/* User dropdown */}
-        <div className="dropdown">
-          <button
-            className="cf-btn cf-btn-secondary d-flex align-items-center gap-1"
-            data-bs-toggle="dropdown"
-          >
-            <User size={14} />
-            <span className="d-none d-md-inline" style={{ fontSize: '13px' }}>Account</span>
-          </button>
-          <ul className="dropdown-menu dropdown-menu-end" style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            fontSize: '13px'
-          }}>
-            <li>
-              <button
-                className="dropdown-item d-flex align-items-center gap-2"
-                onClick={handleLogout}
-                style={{ color: 'var(--text-primary)' }}
-              >
-                <LogOut size={13} />
-                Logout
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        {/* Mobile hamburger — links */}
-        <div className="dropdown d-md-none">
-          <button className="cf-btn cf-btn-secondary" data-bs-toggle="dropdown">
-            ☰
-          </button>
-          <ul className="dropdown-menu dropdown-menu-end" style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-          }}>
-            <li><Link to="/" className="dropdown-item" style={{ color: 'var(--text-primary)', fontSize: '13px' }}>Home</Link></li>
-            <li><Link to="/history" className="dropdown-item" style={{ color: 'var(--text-primary)', fontSize: '13px' }}>History</Link></li>
-            <li><Link to="/about" className="dropdown-item" style={{ color: 'var(--text-primary)', fontSize: '13px' }}>About</Link></li>
-          </ul>
-        </div>
+        {user && (
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            @{user.name?.split(' ')[0]}
+          </span>
+        )}
+        <button
+          onClick={logout}
+          className="d-flex align-items-center gap-1"
+          style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '13px' }}
+        >
+          <LogOut size={13} />
+          <span className="d-none d-sm-inline">Logout</span>
+        </button>
       </div>
-    </nav>
+    </div>
   );
 };
 
