@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Search, FlaskConical, MessageCircle, X, Send, HelpCircle, CheckCircle, AlertCircle, Bot, User, Loader2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
@@ -27,6 +28,27 @@ const Dashboard = () => {
 
   const [toasts, setToasts] = useState([]);
 
+  useEffect(() => {
+  const handleBeforeUnload = (e) => {
+    if (loading) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+}, [loading]);
+
+  useEffect(() => {
+  if (loading) {
+    const message = 'Analysis is still running. Are you sure you want to leave?';
+    // Block in-app navigation
+    window.onbeforeunload = () => message;
+  } else {
+    window.onbeforeunload = null;
+  }
+  return () => { window.onbeforeunload = null; };
+}, [loading]);
   const showToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -126,6 +148,17 @@ const Dashboard = () => {
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-primary)' }}>
       <Navbar />
 
+      {(loading || singleTestLoading) && (
+  <div className="d-flex align-items-center justify-content-center gap-2 py-2" style={{
+    backgroundColor: '#2d1a00',
+    borderBottom: '1px solid #7a4400',
+    fontSize: '12px',
+    color: '#f5a623',
+  }}>
+    <span className="cf-spinner" style={{ borderColor: 'rgba(245,166,35,0.3)', borderTopColor: '#f5a623' }}></span>
+    {loading ? 'Analysis is running — don\'t navigate away' : 'Test is running — don\'t navigate away'}
+  </div>
+)}
       {/* Scrollable main area */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
 
