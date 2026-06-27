@@ -20,6 +20,7 @@ const Dashboard = () => {
   const [progressStep, setProgressStep] = useState('');
   const [singleTestLoading, setSingleTestLoading] = useState(false);
   const diagnosisRef = useRef(null);
+  const [currentRunId, setCurrentRunId] = useState(null);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
@@ -69,6 +70,7 @@ const Dashboard = () => {
     setProgressStep('Analyzing... this may take 1-2 minutes');
     try {
       const res = await runFullPipeline(userCode, correctCode, problemDetails);
+      setCurrentRunId(res.data.runId);  
       setDiagnosis({ type: 'find_bug', ...res.data.diagnosis });
       showToast('Diagnosis complete!', 'success');
       scrollToDiagnosis();
@@ -135,6 +137,7 @@ const Dashboard = () => {
       userCode,
       correctCode,
       chatMessages,
+      currentRunId,
     );
     setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.assistantResponse }]);
   } catch (err) {

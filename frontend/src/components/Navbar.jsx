@@ -20,15 +20,15 @@ const Navbar = () => {
       }}
     >
       {/* Left — logo */}
-      <div className="d-flex align-items-center gap-2">
-        <Bug size={16} color="var(--accent)" />
-        <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Debug</span>
-        <span style={{
-          fontSize: '10px', fontWeight: 600, padding: '1px 6px',
-          border: '1px solid var(--border-color)', borderRadius: '3px',
-          color: 'var(--text-muted)', letterSpacing: '0.5px'
-        }}>BETA</span>
-      </div>
+    <Link to="/" style={{ textDecoration: 'none' }} className="d-flex align-items-center gap-2">
+      <Bug size={16} color="var(--accent)" />
+      <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Debug</span>
+      <span style={{
+      fontSize: '10px', fontWeight: 600, padding: '1px 6px',
+      border: '1px solid var(--border-color)', borderRadius: '3px',
+      color: 'var(--text-muted)', letterSpacing: '0.5px'
+    }}>BETA</span>
+    </Link>
 
       {/* Right — links + user + logout */}
       <div className="d-flex align-items-center gap-2">
