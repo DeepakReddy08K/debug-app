@@ -23,7 +23,6 @@ export const callDeepSeek = async (prompt, maxTokens = 4096) => {
         temperature: 1,
         top_p: 0.95,
         max_tokens: maxTokens,
-        extra_body: { chat_template_kwargs: { thinking: true, reasoning_effort: 'high' } },
         stream: false,
       },
       { headers: { Authorization: `Bearer ${API_KEY}` } }
