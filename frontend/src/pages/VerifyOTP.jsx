@@ -49,8 +49,10 @@ const VerifyOTP = () => {
         style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--navbar-bg)' }}
       >
         <div className="d-flex align-items-center gap-2">
-          <Bug size={16} color="var(--accent)" />
-          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Debug</span>
+          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Bug size={16} color="var(--accent)" />
+            <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Debug</span>
+          </Link>
           <span style={{
             fontSize: '10px', fontWeight: 600, padding: '1px 6px',
             border: '1px solid var(--border-color)', borderRadius: '3px',

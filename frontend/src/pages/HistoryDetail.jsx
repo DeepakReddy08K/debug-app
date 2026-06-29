@@ -5,6 +5,8 @@ import Editor from '@monaco-editor/react';
 import Navbar from '../components/Navbar';
 import { useTheme } from '../context/ThemeContext';
 import { getRunDetail } from '../services/history';
+import { MessageCircle, X, Send, Bot, User, Loader2 } from 'lucide-react';
+import { sendChatMessage } from '../services/chat';
 
 const scenarioConfig = {
   logic_bug:         { label: 'Logic Bug',     color: '#f5a623', bg: '#2d1a00', border: '#7a4400', badgeBg: '#7a4400' },
@@ -22,6 +24,11 @@ const HistoryDetail = () => {
   const [run, setRun] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -36,6 +43,38 @@ const HistoryDetail = () => {
     };
     fetchDetail();
   }, [id]);
+
+  useEffect(() => {
+  if (chatOpen && run?.chatMessages && chatMessages.length === 0) {
+    // Load existing chat history from the run detail
+    setChatMessages(run.chatMessages.map(m => ({
+      role: m.role,
+      content: m.content,
+    })));
+  }
+}, [chatOpen]);
+
+const handleSendChat = async () => {
+  if (!chatInput.trim() || chatLoading) return;
+  const userMessage = chatInput;
+  setChatInput('');
+  setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+  setChatLoading(true);
+  try {
+    const res = await sendChatMessage(
+      userMessage,
+      run.buggyCode,
+      run.correctCode,
+      chatMessages,
+      run.runId,
+    );
+    setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.assistantResponse }]);
+  } catch (err) {
+    setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
+  } finally {
+    setChatLoading(false);
+  }
+};
 
   if (loading) return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
@@ -286,6 +325,116 @@ const HistoryDetail = () => {
         )}
 
       </div>
+      {/* AI Chat floating button */}
+<button
+  onClick={() => setChatOpen(!chatOpen)}
+  style={{
+    position: 'fixed', bottom: '24px', right: '24px',
+    width: '44px', height: '44px', borderRadius: '50%',
+    backgroundColor: '#22c55e', border: 'none',
+    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.2)', zIndex: 200,
+  }}
+>
+  <MessageCircle size={20} color="#ffffff" />
+</button>
+
+{/* AI Chat window */}
+{chatOpen && (
+  <div style={{
+    position: 'fixed', bottom: '80px', right: '24px',
+    width: 'min(320px, calc(100vw - 48px))',
+    height: '420px',
+    backgroundColor: 'var(--navbar-bg)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '8px', display: 'flex', flexDirection: 'column',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 200,
+  }}>
+    <div className="d-flex align-items-center justify-content-between px-3 py-2" style={{ borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>AI Chat — Run #{run.runId}</span>
+      <button onClick={() => setChatOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}>
+        <X size={14} />
+      </button>
+    </div>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {chatMessages.length === 0 && (
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px' }}>
+          Ask anything about this debug session.
+        </p>
+      )}
+      {chatMessages.map((msg, i) => (
+        <div key={i} className="d-flex align-items-start gap-2" style={{ flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+          <div style={{
+            width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+            backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {msg.role === 'user'
+              ? <User size={12} color="#ffffff" />
+              : <Bot size={12} color="var(--text-secondary)" />
+            }
+          </div>
+          <div style={{
+            backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+            color: msg.role === 'user' ? '#ffffff' : 'var(--text-primary)',
+            padding: '7px 10px', borderRadius: '6px',
+            fontSize: '12px', maxWidth: '75%', lineHeight: '1.5',
+            border: '1px solid var(--border-color)',
+          }}>
+            {msg.content}
+          </div>
+        </div>
+      ))}
+      {chatLoading && (
+        <div className="d-flex align-items-start gap-2">
+          <div style={{
+            width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+            backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Bot size={12} color="var(--text-secondary)" />
+          </div>
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+            padding: '7px 12px', borderRadius: '6px',
+            display: 'flex', alignItems: 'center', gap: '6px',
+          }}>
+            <Loader2 size={12} color="var(--text-muted)" style={{ animation: 'spin 0.7s linear infinite' }} />
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Thinking...</span>
+          </div>
+        </div>
+      )}
+    </div>
+    <div className="d-flex gap-2 p-2" style={{ borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
+      <input
+        type="text"
+        value={chatInput}
+        onChange={e => setChatInput(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+        placeholder="Ask about this debug session..."
+        style={{
+          flex: 1, padding: '6px 10px', fontSize: '12px',
+          backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)',
+          border: '1px solid var(--border-color)', borderRadius: '4px', outline: 'none',
+        }}
+      />
+      <button
+        onClick={handleSendChat}
+        disabled={chatLoading}
+        style={{
+          background: chatLoading ? 'var(--bg-secondary)' : '#22c55e',
+          border: 'none', borderRadius: '4px',
+          padding: '6px 10px', cursor: chatLoading ? 'not-allowed' : 'pointer',
+          color: chatLoading ? 'var(--text-muted)' : '#ffffff',
+          display: 'flex', alignItems: 'center',
+        }}
+      >
+        <Send size={13} />
+      </button>
+    </div>
+  </div>
+  )}
     </div>
   );
 };
