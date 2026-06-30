@@ -21,6 +21,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
+app.set('trust proxy', 1);
 const PgSession = connectPgSimple(session);
 
 // Allow frontend to talk to backend with credentials
