@@ -167,7 +167,20 @@ export const analyzeProblem = async (req, res) => {
 // Branch 2a — Logic function
 export const checkSyntaxLogic = async (runId, buggyCode, language) => {
   log.step('debugController', '2', 'Building Branch 2a prompt');
-  const prompt = `You are a strict syntax-only checker for ${language} code. Flag ONLY compile errors or guaranteed runtime crashes (e.g. missing semicolons, unmatched brackets, undeclared variables, type mismatches that fail to compile, null pointer dereference that always crashes). Do NOT flag logic differences compared to any reference — that is handled elsewhere. Default to has_errors: false when in doubt.
+  const prompt = `You are a strict syntax-only checker for ${language} code. Your ONLY job is to detect compile-time errors or guaranteed runtime crashes. 
+
+DO NOT flag:
+- Wrong initial values (e.g., sum=1 instead of sum=0) — this is a LOGIC bug, not syntax
+- Wrong comparison operators (e.g., < instead of <=) — this is a LOGIC bug, not syntax
+- Off-by-one errors — this is a LOGIC bug, not syntax
+- Any code that compiles and runs without crashing, even if the output is wrong
+
+ONLY flag:
+- Missing semicolons, unmatched brackets/parentheses
+- Undeclared variables or type mismatches that fail to COMPILE
+- Operations that ALWAYS crash regardless of input (e.g., dereferencing a null pointer unconditionally, division by a hardcoded zero)
+
+If the code compiles successfully and runs without crashing on any input, you MUST set has_errors to false, even if the program's output might be logically wrong.
 
 Code to check:
 ${buggyCode}
@@ -183,8 +196,9 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
   "can_proceed_to_testing": boolean
 }`;
 
+const aiResponse = await callDeepSeek(prompt, 4096, 0.1); // low temperature for consistency
   log.step('debugController', '3', 'Calling DeepSeek for syntax check');
-  const aiResponse = await callDeepSeek(prompt);
+
 
   log.step('debugController', '4', 'Parsing AI response');
   let cleanResponse = aiResponse.replace(/```json\n?|```\n?/g, '').trim();
@@ -518,7 +532,7 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
 }`;
 
   log.step('debugController', '6', 'Calling DeepSeek for diagnosis');
-  const aiResponse = await callDeepSeek(prompt, 4096);
+  const aiResponse = await callDeepSeek(prompt, 4096, 0.1, process.env.MODEL_DIAGNOSIS);
 
   log.step('debugController', '7', 'Parsing AI response');
   let cleanResponse = aiResponse.replace(/```json\n?|```\n?/g, '').trim();

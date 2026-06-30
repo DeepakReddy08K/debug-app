@@ -12,15 +12,16 @@ const BASE_URL = process.env.NVIDIA_BASE_URL;
 const API_KEY = process.env.NVIDIA_API_KEY;
 
 // DeepSeek call — non-streaming, used for syntax check and diagnosis
-export const callDeepSeek = async (prompt, maxTokens = 4096) => {
-  log.step('nvidiaClient', '1', 'Calling DeepSeek model');
+//Deepseek failed due to api error so using meta llama-3.1-8b for syntax check and nemetron-super-49b for diagnosis branch 3
+export const callDeepSeek = async (prompt, maxTokens = 4096, temperature = 1, model = process.env.MODEL_FAST) => {
+  log.step('nvidiaClient', '1', `Calling ${model}`);
   try {
     const response = await axios.post(
       `${BASE_URL}/chat/completions`,
       {
-        model: process.env.MODEL_FAST,
+        model: model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 1,
+        temperature: temperature,
         top_p: 0.95,
         max_tokens: maxTokens,
         stream: false,
@@ -28,11 +29,11 @@ export const callDeepSeek = async (prompt, maxTokens = 4096) => {
       { headers: { Authorization: `Bearer ${API_KEY}` } }
     );
     const content = response.data.choices[0].message.content;
-    log.success('nvidiaClient', 'DeepSeek call successful');
+    log.success('nvidiaClient', `${model} call successful`);
     return content;
   } catch (err) {
-    log.error('nvidiaClient', 'DeepSeek call failed', err.response?.data || err);
-    throw new Error('AI request failed (DeepSeek)');
+    log.error('nvidiaClient', `${model} call failed`, err.response?.data || err.message);
+    throw new Error('AI request failed');
   }
 };
 
