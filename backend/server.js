@@ -3,10 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import authRoutes from './routes/auth.js';//routes
+import authRoutes from './routes/auth.js';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
-//import cookieParser from 'cookie-parser';
 import passport from './config/passport.js';
 import './config/db.js';
 import pool from './config/db.js';
@@ -24,13 +23,10 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const app = express();
 const PgSession = connectPgSimple(session);
 
-// Parse cookies
-//app.use(cookieParser());
-
 // Allow frontend to talk to backend with credentials
 app.use(cors({
   origin: process.env.CLIENT_URL,
-  credentials: true, // needed for cookies/sessions to work cross origin
+  credentials: true,
 }));
 
 // Parse incoming JSON
@@ -39,17 +35,18 @@ app.use(express.json());
 // Session setup — stores sessions in PostgreSQL
 app.use(session({
   store: new PgSession({
-    pool,                    // use our existing pg pool
-    tableName: 'session',    // table name in DB
-    createTableIfMissing: true, // auto creates session table
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
   }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,           // set to true in production with HTTPS
-    httpOnly: true,          // prevents JS from accessing cookie
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));
 
@@ -66,14 +63,15 @@ app.get('/', (req, res) => {
   res.json({ message: 'Debug App API running' });
 });
 
-// Routes mounted here as we build them
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/debug', debugRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/history', historyRoutes);
 
-//errorhandler middleware
+// Error handler
 app.use(errorHandler);
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   log.success('server', `Server running on port ${PORT}`);
