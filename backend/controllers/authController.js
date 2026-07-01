@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
+import {Resend} from 'resend';
 import { createUser, findByEmail, deleteUnverifiedUser, verifyUserEmail, findOrCreateGoogleUser, findById, saveOTP, verifyOTP, updatePassword, verifyResetToken, clearResetToken } from '../models/userModel.js';
 import log from '../config/logger.js';
 import dotenv from 'dotenv';
@@ -11,22 +11,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-// Nodemailer transporter — uses Gmail SMTP
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // TLS — upgrades connection after connecting
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
+// Nodemailer transporter fails after render deployment so using resend api for mails
+const resend = new Resend(process.env.RESEND_API_KEY);
+log.success('resend', 'Resend email client ready');
 
-// Verify transporter on startup
-transporter.verify((err, success) => {
-  if (err) log.error('nodemailer', 'Mail transporter failed', err);
-  else log.success('nodemailer', 'Mail transporter ready');
-});
 // Register new user with email and password
 export const register = async (req, res) => {
   log.step('authController', '1', 'Register request received');
@@ -73,15 +61,10 @@ if (existingUser) {
     // Send verification email
     log.step('authController', '6', 'Sending verification email');
     const verifyUrl = `${process.env.APP_URL}/api/auth/verify/${verificationToken}`;
-    await transporter.sendMail({
-      from: `"Debug App" <${process.env.MAIL_USER}>`,
+    await resend.emails.send({
+      from:'Debug App <onboarding@resend.dev>',
       to: email,
       subject: 'Verify your Debug App account',
-      headers: {
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'Importance': 'High',
-      },
       html: `
   <!DOCTYPE html>
   <html>
@@ -339,8 +322,8 @@ export const forgotPassword = async (req, res) => {
 
     // Send OTP email
     log.step('authController', '5', 'Sending OTP email');
-    await transporter.sendMail({
-      from: `"Debug App" <${process.env.MAIL_USER}>`,
+    await resend.emails.send({
+      from: 'Debug App <onboarding@resend.dev>',
       to: email,
       subject: 'Your Debug App Password Reset OTP',
       html: `
