@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import {Resend} from 'resend';
+import { BrevoClient } from '@getbrevo/brevo';
 import { createUser, findByEmail, deleteUnverifiedUser, verifyUserEmail, findOrCreateGoogleUser, findById, saveOTP, verifyOTP, updatePassword, verifyResetToken, clearResetToken } from '../models/userModel.js';
 import log from '../config/logger.js';
 import dotenv from 'dotenv';
@@ -12,8 +12,12 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Nodemailer transporter fails after render deployment so using resend api for mails
-const resend = new Resend(process.env.RESEND_API_KEY);
-log.success('resend', 'Resend email client ready');
+//Resend asking domain for sending mails to unkonwon users so switchd to Brevo
+
+const brevoClient = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY,
+});
+log.success('brevo', 'Brevo email client ready');
 
 // Register new user with email and password
 export const register = async (req, res) => {
@@ -61,42 +65,30 @@ if (existingUser) {
     // Send verification email
     log.step('authController', '6', 'Sending verification email');
     const verifyUrl = `${process.env.APP_URL}/api/auth/verify/${verificationToken}`;
-    await resend.emails.send({
-      from:'Debug App <onboarding@resend.dev>',
-      to: email,
-      subject: 'Verify your Debug App account',
-      html: `
-  <!DOCTYPE html>
-  <html>
-    <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 30px;">
-      <div style="max-width: 500px; margin: auto; background: white; border-radius: 10px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        
-        <h2 style="color: #1a1a1a;">Welcome to Debug App, ${name}! 👋</h2>
-        <p style="color: #555;">Thanks for registering. Please verify your email address to activate your account.</p>
-        
-        <div style="background: #f9f9f9; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <p style="margin: 0; color: #333;"><strong>Email:</strong> ${email}</p>
-        </div>
-
-        <p style="color: #555;">Click <strong>Accept</strong> to verify your account or <strong>Decline</strong> to cancel registration.</p>
-
-        <div style="text-align: center; margin: 30px 0; display: flex; flex-direction: column; align-items: center; gap: 15px;">
-  <a href="${verifyUrl}" 
-    style="background: #22c55e; color: white; padding: 12px 0; border-radius: 6px; text-decoration: none; font-weight: bold; width: 80%; display: block; text-align: center;">
-    ✅ Accept
-  </a>
-  <a href="${process.env.APP_URL}/api/auth/decline/${verificationToken}" 
-    style="background: #ef4444; color: white; padding: 12px 0; border-radius: 6px; text-decoration: none; font-weight: bold; width: 80%; display: block; text-align: center;">
-    ❌ Decline
-  </a>
-</div>
-
-        <p style="color: #999; font-size: 12px; text-align: center;">This link expires in 24 hours. If you didn't register, ignore this email.</p>
+    await brevoClient.transactionalEmails.sendTransacEmail({
+  subject: 'Verify your Debug App account',
+  sender: { name: 'Debug App', email: process.env.MAIL_USER },
+  to: [{ email: email, name: name }],
+  htmlContent: `
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 30px;">
+    <div style="max-width: 500px; margin: auto; background: white; border-radius: 10px; padding: 30px;">
+      <h2 style="color: #1a1a1a;">Welcome to Debug App, ${name}! 👋</h2>
+      <p style="color: #555;">Thanks for registering. Please verify your email address to activate your account.</p>
+      <div style="background: #f9f9f9; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <p style="margin: 0; color: #333;"><strong>Email:</strong> ${email}</p>
       </div>
-    </body>
-  </html>
-`,
-    });
+      <p style="color: #555;">Click <strong>Accept</strong> to verify your account or <strong>Decline</strong> to cancel registration.</p>
+      <div style="text-align: center; margin: 30px 0; display: flex; flex-direction: column; align-items: center; gap: 15px;">
+        <a href="${verifyUrl}" style="background: #22c55e; color: white; padding: 12px 0; border-radius: 6px; text-decoration: none; font-weight: bold; width: 80%; display: block; text-align: center;">✅ Accept</a>
+        <a href="${process.env.APP_URL}/api/auth/decline/${verificationToken}" style="background: #ef4444; color: white; padding: 12px 0; border-radius: 6px; text-decoration: none; font-weight: bold; width: 80%; display: block; text-align: center;">❌ Decline</a>
+      </div>
+      <p style="color: #999; font-size: 12px; text-align: center;">This link expires in 24 hours. If you didn't register, ignore this email.</p>
+    </div>
+  </body>
+</html>`,
+});
 
     log.success('authController', `User registered: ${email}`);
     res.status(201).json({
@@ -322,29 +314,28 @@ export const forgotPassword = async (req, res) => {
 
     // Send OTP email
     log.step('authController', '5', 'Sending OTP email');
-    await resend.emails.send({
-      from: 'Debug App <onboarding@resend.dev>',
-      to: email,
-      subject: 'Your Debug App Password Reset OTP',
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 30px;">
-            <div style="max-width: 500px; margin: auto; background: white; border-radius: 10px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-              <h2 style="color: #1a1a1a;">Password Reset OTP</h2>
-              <p style="color: #555;">You requested a password reset for your Debug App account.</p>
-              <div style="text-align: center; margin: 30px 0;">
-                <div style="background: #f0f0f0; border-radius: 8px; padding: 20px; display: inline-block;">
-                  <h1 style="color: #1a1a1a; letter-spacing: 8px; margin: 0;">${otp}</h1>
-                </div>
-              </div>
-              <p style="color: #555; text-align: center;">This OTP expires in <strong>10 minutes</strong>.</p>
-              <p style="color: #999; font-size: 12px; text-align: center;">If you didn't request this, ignore this email.</p>
+    await brevoClient.transactionalEmails.sendTransacEmail({
+  subject: 'Your Debug App Password Reset OTP',
+  sender: { name: 'Debug App', email: process.env.MAIL_USER },
+  to: [{ email: email }],
+  htmlContent: `
+    <!DOCTYPE html>
+    <html>
+      <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 30px;">
+        <div style="max-width: 500px; margin: auto; background: white; border-radius: 10px; padding: 30px;">
+          <h2 style="color: #1a1a1a;">Password Reset OTP</h2>
+          <p style="color: #555;">You requested a password reset for your Debug App account.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <div style="background: #f0f0f0; border-radius: 8px; padding: 20px; display: inline-block;">
+              <h1 style="color: #1a1a1a; letter-spacing: 8px; margin: 0;">${otp}</h1>
             </div>
-          </body>
-        </html>
-      `,
-    });
+          </div>
+          <p style="color: #555; text-align: center;">This OTP expires in <strong>10 minutes</strong>.</p>
+          <p style="color: #999; font-size: 12px; text-align: center;">If you didn't request this, ignore this email.</p>
+        </div>
+      </body>
+    </html>`,
+});
 
     log.success('authController', `OTP sent to: ${email}`);
     res.status(200).json({ message: 'OTP sent to your email.' });
