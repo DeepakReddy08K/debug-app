@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: '/api/history',
+  baseURL: `${import.meta.env.VITE_API_URL}/api/history`,
   withCredentials: true,
 });
 

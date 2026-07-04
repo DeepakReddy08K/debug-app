@@ -4,6 +4,8 @@ import axios from 'axios';
 
 const AuthContext = createContext();
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11,7 +13,7 @@ export const AuthProvider = ({ children }) => {
 
   // Check session on app load
   useEffect(() => {
-    axios.get('/api/auth/me', { withCredentials: true })
+    axios.get(`${API_URL}/api/auth/me`, { withCredentials: true })
       .then(res => setUser(res.data.user))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
@@ -19,7 +21,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post('/api/auth/logout', {}, { withCredentials: true });
+      await axios.post(`${API_URL}/api/auth/logout`, {}, { withCredentials: true });
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
