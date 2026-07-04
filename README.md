@@ -207,7 +207,7 @@ debug-app/
 ## Author
 
 **Deepak Reddy** — B.Tech Chemical Engineering, NIT Warangal  
-GitHub: [github.com/Deepak-0809](https://github.com/Deepak-0809)  
+GitHub: [github.com/Deepak-0809](https://github.com/DeepakReddy08K)  
 Email: kondakindideepakreddy@gmail.com
 
 ---
