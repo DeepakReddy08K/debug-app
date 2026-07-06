@@ -120,7 +120,7 @@ const Signup = () => {
 
               {/* Google */}
               <button
-                onClick={() => window.location.href = '/api/auth/google'}
+                onClick={() => window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`}
                 className="w-100 d-flex align-items-center justify-content-center gap-2 mb-3"
                 style={{
                   padding: '8px', fontSize: '13px', fontWeight: 500,
