@@ -15,6 +15,8 @@ import { generalLimiter } from './config/rateLimiter.js';
 import chatRoutes from './routes/chat.js';
 import historyRoutes from './routes/history.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import subscriptionRoutes from './routes/subscription.js';
+import webhookRoutes from './routes/webhook.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +31,20 @@ app.use(cors({
   origin: process.env.CLIENT_URL,
   credentials: true,
 }));
+// Razorpay signature verification needs the raw body
+app.use('/api/webhook', (req, res, next) => {
+  let rawBody = '';
+  req.on('data', (chunk) => { rawBody += chunk.toString(); });
+  req.on('end', () => {
+    req.rawBody = rawBody;
+    try {
+      req.body = JSON.parse(rawBody);
+    } catch {
+      req.body = {};
+    }
+    next();
+  });
+}, webhookRoutes);
 
 // Parse incoming JSON
 app.use(express.json());
@@ -69,6 +85,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/debug', debugRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 // Error handler
 app.use(errorHandler);

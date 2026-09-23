@@ -60,3 +60,14 @@ export const chatLimiter = rateLimit({
     res.status(429).json({ error: 'Too many chat messages. Please wait an hour before sending more.' });
   },
 });
+// Payment routes — strict, prevents order spam
+export const paymentLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    log.warn('rateLimiter', `Payment limit exceeded: ${req.ip}`);
+    res.status(429).json({ error: 'Too many payment requests. Try again in an hour.' });
+  },
+});

@@ -21,7 +21,8 @@ import { updateRunStatus } from '../models/runModel.js';
 import log from '../config/logger.js';
 //to fix common ai-generated json issues
 import { jsonrepair } from 'jsonrepair';
-
+//For subscription managing and incrementing runs per month
+import { incrementUsage } from '../models/subscriptionModel.js';
 
 //branch 1
 // Detect language from code patterns
@@ -643,7 +644,9 @@ export const runFullPipeline = async (req, res) => {
     // ---- BRANCH 3 ----
     log.step('debugController', '6', 'Pipeline: Branch 3 starting');
     const diagnosis = await diagnoseBugLogic(runId);
-
+    if (req.usageMeta) {
+      await incrementUsage(userId, req.usageMeta.planSlug, req.usageMeta.modelTier);
+    }
     log.success('debugController', `Pipeline completed for run: ${runId}`);
     res.status(200).json({
       runId,
@@ -692,7 +695,9 @@ export const runSingleTest = async (req, res) => {
     const buggyOutput = (buggyResult.output || buggyResult.error || '').trim();
     const correctOutput = (correctResult.output || '').trim();
     const isMatching = buggyOutput === correctOutput;
-
+    if (req.usageMeta) {
+      await incrementUsage(req.session.userId, req.usageMeta.planSlug, req.usageMeta.modelTier);
+    }
     log.success('debugController', `Run single test completed, matching: ${isMatching}`);
     res.status(200).json({
       input,

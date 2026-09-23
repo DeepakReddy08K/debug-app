@@ -2,6 +2,7 @@ import express from 'express';
 import { analyzeProblem, checkSyntax, generateTestCases, executeTestCases, diagnoseBug, runFullPipeline, runSingleTest} from '../controllers/debugController.js';
 import { isAuthenticated } from '../middleware/authMiddleware.js';
 import { aiLimiter, executionLimiter  } from '../config/rateLimiter.js';
+import { checkUsageLimit } from '../middleware/usageMiddleware.js';
 
 const router = express.Router();
 

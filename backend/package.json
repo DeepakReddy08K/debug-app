@@ -26,9 +26,11 @@
     "jsonrepair": "^3.14.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.11",
+    "openai": "^7.20.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.21.0",
+    "razorpay": "^2.9.8",
     "resend": "^6.16.0"
   },
   "devDependencies": {
