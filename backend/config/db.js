@@ -15,11 +15,23 @@ const pool = new Pool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: { rejectUnauthorized: false }//required for neon cloud postgress
+  ssl: { rejectUnauthorized: false },
+  // Add these:
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+
+pool.on('error', (err) => {
+  log.error('db', 'Unexpected pool error', err.message);
 });
 
 pool.connect()
-  .then(() => log.success('db', 'PostgreSQL connected successfully'))
+  .then(client => {
+    log.success('db', 'PostgreSQL connected successfully');
+    client.release();
+  })
   .catch(err => log.error('db', 'PostgreSQL connection failed', err));
 
 export default pool;
