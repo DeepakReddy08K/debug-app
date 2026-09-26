@@ -265,7 +265,8 @@ Problem Schema (use this EXACTLY to generate valid inputs):
 ${JSON.stringify(schema, null, 2)}
 
 CRITICAL RULES:
-- Inputs must be literal strings with actual newlines (\\n) — NOT Python expressions, NOT pseudo-code.
+- Inputs must be literal strings with actual newlines (\\n) — NOT JavaScript, NOT Python expressions, NOT .repeat(), NOT template literals, NOT pseudo-code. Every character in the input must be written out explicitly.
+- NEVER use programming constructs like "0 ".repeat(199) or Array(n).fill(0) — write the actual numbers out.
 - Follow the EXACT input_structure format: correct line order, correct separators (space/newline), correct variable count.
 - Respect all constraints (min/max) defined in the schema.
 - N (array sizes etc) should be ≤ 200 for normal cases, except for any specifically labeled stress/large test category which can go up to schema's max.
@@ -315,12 +316,35 @@ Output ONLY a valid JSON object, no markdown, no explanation, in this exact stru
     }
   }
 
+  // Sanitize test cases — remove any that have empty, JS expressions, or oversized inputs
+const sanitizeTestCases = (testCases) => {
+  return testCases.filter(tc => {
+      if (!tc.input || typeof tc.input !== 'string') return false;
+      if (tc.input.trim() === '') return false;
+      if (tc.input.trim() === '""') return false;
+      // Reject JS expressions (template literals, .repeat(), etc.)
+      if (tc.input.includes('.repeat(')) return false;
+      if (tc.input.includes('${')) return false;
+      if (tc.input.includes('Array(')) return false;
+      // Reject oversized inputs
+      if (tc.input.length > 1500) return false;
+      return true;
+    });
+  };
+
+  const validTestCases = sanitizeTestCases(result.test_cases);
+
+  if (validTestCases.length === 0) {
+    log.error('debugController', 'All test cases were invalid after sanitization');
+    throw new Error('AI returned invalid test cases. Please try again.');
+  }
+
   log.step('debugController', '6', 'Saving test cases to DB');
   const batchNumber = retryRound + 1;
-  const savedCases = await saveTestCases(runId, result.test_cases.map(tc => ({ input: tc.input })), batchNumber);
+  const savedCases = await saveTestCases(runId, validTestCases.map(tc => ({ input: tc.input })), batchNumber);
 
   log.success('debugController', `Branch 2b completed for run: ${runId}, batch: ${batchNumber}`);
-  return { batchNumber, testCases: result.test_cases, savedIds: savedCases.map(sc => sc.id) };
+  return { batchNumber, testCases: validTestCases, savedIds: savedCases.map(sc => sc.id) };
 };
 // Branch 2b — Route handler
 export const generateTestCases = async (req, res) => {
