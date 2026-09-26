@@ -27,8 +27,20 @@ app.set('trust proxy', 1);
 const PgSession = connectPgSimple(session);
 
 // Allow frontend to talk to backend with credentials
+const allowedOrigins = [
+  'https://www.debugcp.me',
+  'https://debug-app-inky.vercel.app',
+  'http://localhost:5173', // for local dev
+];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 // Razorpay signature verification needs the raw body

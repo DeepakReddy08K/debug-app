@@ -11,6 +11,7 @@ import NotFound from './pages/NotFound';
 import Dashboard from './pages/Dashboard';
 import History from './pages/History';
 import HistoryDetail from './pages/HistoryDetail';
+import Pricing from './pages/Pricing';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
           <Route path="/history/:id" element={<ProtectedRoute><HistoryDetail /></ProtectedRoute>} />
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>

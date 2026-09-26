@@ -1,14 +1,18 @@
-import { useState, useRef } from 'react';
-import { useEffect } from 'react';
+// frontend/src/pages/Dashboard.jsx
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { Search, FlaskConical, MessageCircle, X, Send, HelpCircle, CheckCircle, AlertCircle, Bot, User, Loader2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { runFullPipeline, runSingleTest } from '../services/debug';
 import { sendChatMessage } from '../services/chat';
 
 const Dashboard = () => {
   const { theme } = useTheme();
+  const { usage, fetchPlan } = useAuth();
+  const navigate = useNavigate();
   const editorTheme = theme === 'dark' ? 'vs-dark' : 'light';
 
   const [userCode, setUserCode] = useState('');
@@ -29,27 +33,28 @@ const Dashboard = () => {
 
   const [toasts, setToasts] = useState([]);
 
-  useEffect(() => {
-  const handleBeforeUnload = (e) => {
-    if (loading) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  };
-  window.addEventListener('beforeunload', handleBeforeUnload);
-  return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-}, [loading]);
+  const isLimitHit = usage?.limit !== null && usage?.limit !== undefined && usage?.remaining === 0;
 
   useEffect(() => {
-  if (loading) {
-    const message = 'Analysis is still running. Are you sure you want to leave?';
-    // Block in-app navigation
-    window.onbeforeunload = () => message;
-  } else {
-    window.onbeforeunload = null;
-  }
-  return () => { window.onbeforeunload = null; };
-}, [loading]);
+    const handleBeforeUnload = (e) => {
+      if (loading) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [loading]);
+
+  useEffect(() => {
+    if (loading) {
+      window.onbeforeunload = () => 'Analysis is still running. Are you sure you want to leave?';
+    } else {
+      window.onbeforeunload = null;
+    }
+    return () => { window.onbeforeunload = null; };
+  }, [loading]);
+
   const showToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -70,11 +75,18 @@ const Dashboard = () => {
     setProgressStep('Analyzing... this may take 1-2 minutes');
     try {
       const res = await runFullPipeline(userCode, correctCode, problemDetails);
-      setCurrentRunId(res.data.runId);  
+      setCurrentRunId(res.data.runId);
       setDiagnosis({ type: 'find_bug', ...res.data.diagnosis });
       showToast('Diagnosis complete!', 'success');
+      fetchPlan(); // refresh usage count in navbar
       scrollToDiagnosis();
     } catch (err) {
+      const errMsg = err.response?.data?.message;
+      if (err.response?.status === 429 && err.response?.data?.error === 'quota_exceeded') {
+        showToast(errMsg || 'Monthly limit reached. Upgrade to continue.', 'error');
+        fetchPlan();
+        return;
+      }
       setDiagnosis({
         type: 'find_bug',
         scenario: 'error',
@@ -110,8 +122,14 @@ const Dashboard = () => {
         language: res.data.language,
       });
       showToast(res.data.isMatching ? 'Outputs match!' : 'Outputs differ!', res.data.isMatching ? 'success' : 'error');
+      fetchPlan(); // refresh usage count after single test
       scrollToDiagnosis();
     } catch (err) {
+      if (err.response?.status === 429 && err.response?.data?.error === 'quota_exceeded') {
+        showToast(err.response?.data?.message || 'Monthly limit reached. Upgrade to continue.', 'error');
+        fetchPlan();
+        return;
+      }
       setDiagnosis({
         type: 'single_test',
         scenario: 'error',
@@ -125,43 +143,43 @@ const Dashboard = () => {
   };
 
   const handleSendChat = async () => {
-  if (!chatInput.trim() || chatLoading) return;
-  const userMessage = chatInput;
-  setChatInput('');
-  setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-  setChatLoading(true);
-
-  try {
-    const res = await sendChatMessage(
-      userMessage,
-      userCode,
-      correctCode,
-      chatMessages,
-      currentRunId,
-    );
-    setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.assistantResponse }]);
-  } catch (err) {
-    setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
-  } finally {
-    setChatLoading(false);
-  }
-};
+    if (!chatInput.trim() || chatLoading) return;
+    const userMessage = chatInput;
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setChatLoading(true);
+    try {
+      const res = await sendChatMessage(
+        userMessage,
+        userCode,
+        correctCode,
+        chatMessages,
+        currentRunId,
+      );
+      setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.assistantResponse }]);
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-primary)' }}>
       <Navbar />
 
       {(loading || singleTestLoading) && (
-  <div className="d-flex align-items-center justify-content-center gap-2 py-2" style={{
-    backgroundColor: '#2d1a00',
-    borderBottom: '1px solid #7a4400',
-    fontSize: '12px',
-    color: '#f5a623',
-  }}>
-    <span className="cf-spinner" style={{ borderColor: 'rgba(245,166,35,0.3)', borderTopColor: '#f5a623' }}></span>
-    {loading ? 'Analysis is running — don\'t navigate away' : 'Test is running — don\'t navigate away'}
-  </div>
-)}
+        <div className="d-flex align-items-center justify-content-center gap-2 py-2" style={{
+          backgroundColor: '#2d1a00',
+          borderBottom: '1px solid #7a4400',
+          fontSize: '12px',
+          color: '#f5a623',
+        }}>
+          <span className="cf-spinner" style={{ borderColor: 'rgba(245,166,35,0.3)', borderTopColor: '#f5a623' }}></span>
+          {loading ? "Analysis is running — don't navigate away" : "Test is running — don't navigate away"}
+        </div>
+      )}
+
       {/* Scrollable main area */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
 
@@ -229,29 +247,59 @@ const Dashboard = () => {
                 }}
               />
             </div>
+
+            {/* Usage warning */}
+            {usage?.limit && (
+              <div
+                className="mb-2 d-flex align-items-center justify-content-between"
+                style={{ fontSize: '11px', color: isLimitHit ? '#f85149' : 'var(--text-muted)' }}
+              >
+                <span>{usage.used}/{usage.limit} runs used this month</span>
+                {isLimitHit && (
+                  <button
+                    onClick={() => navigate('/pricing')}
+                    style={{
+                      fontSize: '11px', fontWeight: 600,
+                      background: 'none', border: 'none',
+                      color: '#6366f1', cursor: 'pointer', padding: 0,
+                    }}
+                  >
+                    Upgrade →
+                  </button>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleFindBug}
-              disabled={loading}
+              disabled={loading || isLimitHit}
               className="w-100 d-flex align-items-center justify-content-center gap-2"
               style={{
                 padding: '9px', fontSize: '13px', fontWeight: 600,
-                backgroundColor: '#22c55e', color: '#ffffff',
-                border: 'none', borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer',
+                backgroundColor: isLimitHit ? 'var(--bg-secondary)' : '#22c55e',
+                color: isLimitHit ? 'var(--text-muted)' : '#ffffff',
+                border: isLimitHit ? '1px solid var(--border-color)' : 'none',
+                borderRadius: '4px',
+                cursor: (loading || isLimitHit) ? 'not-allowed' : 'pointer',
                 opacity: loading ? 0.7 : 1,
               }}
             >
               {loading ? (
-                  <>
+                <>
                   <span className="cf-spinner"></span>
                   Processing...
-                  </>
-                  ) : (
-                  <>
+                </>
+              ) : isLimitHit ? (
+                <>
+                  <Search size={14} />
+                  Limit Reached — Upgrade to Continue
+                </>
+              ) : (
+                <>
                   <Search size={14} />
                   Find Failing Test Case
-                  </>
-            )}
+                </>
+              )}
             </button>
             <div className="mt-1">
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>AI auto-detects language and input format</span>
@@ -282,18 +330,19 @@ const Dashboard = () => {
             </div>
             <button
               onClick={handleRunTest}
-              disabled={singleTestLoading}
+              disabled={singleTestLoading || isLimitHit}
               className="w-100 d-flex align-items-center justify-content-center gap-2"
               style={{
                 padding: '9px', fontSize: '13px', fontWeight: 600,
-                backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                backgroundColor: isLimitHit ? 'var(--bg-secondary)' : 'var(--bg-secondary)',
+                color: isLimitHit ? 'var(--text-muted)' : 'var(--text-primary)',
                 border: '1px solid var(--border-color)', borderRadius: '4px',
-                cursor: singleTestLoading ? 'not-allowed' : 'pointer',
+                cursor: (singleTestLoading || isLimitHit) ? 'not-allowed' : 'pointer',
                 opacity: singleTestLoading ? 0.7 : 1,
               }}
             >
               <FlaskConical size={14} />
-              {singleTestLoading ? 'Running...' : 'Run Test'}
+              {singleTestLoading ? 'Running...' : isLimitHit ? 'Limit Reached' : 'Run Test'}
             </button>
             <div className="mt-1">
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Runs both codes with your input and compares outputs</span>
@@ -475,7 +524,6 @@ const Dashboard = () => {
           )}
 
         </div>
-
       </div>
 
       {/* Toast notifications */}
@@ -521,59 +569,55 @@ const Dashboard = () => {
             </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-  {chatMessages.length === 0 && (
-    <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px' }}>
-      Ask anything about your bug or code.
-    </p>
-  )}
-  {chatMessages.map((msg, i) => (
-    <div key={i} className="d-flex align-items-start gap-2" style={{ flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
-      {/* Icon */}
-      <div style={{
-        width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-        backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {msg.role === 'user'
-          ? <User size={12} color="#ffffff" />
-          : <Bot size={12} color="var(--text-secondary)" />
-        }
-      </div>
-      {/* Bubble */}
-      <div style={{
-        backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
-        color: msg.role === 'user' ? '#ffffff' : 'var(--text-primary)',
-        padding: '7px 10px', borderRadius: '6px',
-        fontSize: '12px', maxWidth: '75%', lineHeight: '1.5',
-        border: '1px solid var(--border-color)',
-      }}>
-        {msg.content}
-      </div>
-    </div>
-  ))}
-
-  {/* AI loading indicator */}
-  {chatLoading && (
-    <div className="d-flex align-items-start gap-2">
-      <div style={{
-        width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-        backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Bot size={12} color="var(--text-secondary)" />
-      </div>
-      <div style={{
-        backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-        padding: '7px 12px', borderRadius: '6px',
-        display: 'flex', alignItems: 'center', gap: '6px',
-      }}>
-        <Loader2 size={12} color="var(--text-muted)" style={{ animation: 'spin 0.7s linear infinite' }} />
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Thinking...</span>
-      </div>
-    </div>
-  )}
-</div>
+            {chatMessages.length === 0 && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px' }}>
+                Ask anything about your bug or code.
+              </p>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} className="d-flex align-items-start gap-2" style={{ flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+                <div style={{
+                  width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                  backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {msg.role === 'user'
+                    ? <User size={12} color="#ffffff" />
+                    : <Bot size={12} color="var(--text-secondary)" />
+                  }
+                </div>
+                <div style={{
+                  backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+                  color: msg.role === 'user' ? '#ffffff' : 'var(--text-primary)',
+                  padding: '7px 10px', borderRadius: '6px',
+                  fontSize: '12px', maxWidth: '75%', lineHeight: '1.5',
+                  border: '1px solid var(--border-color)',
+                }}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="d-flex align-items-start gap-2">
+                <div style={{
+                  width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Bot size={12} color="var(--text-secondary)" />
+                </div>
+                <div style={{
+                  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                  padding: '7px 12px', borderRadius: '6px',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                }}>
+                  <Loader2 size={12} color="var(--text-muted)" style={{ animation: 'spin 0.7s linear infinite' }} />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Thinking...</span>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="d-flex gap-2 p-2" style={{ borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
             <input
               type="text"
@@ -596,9 +640,9 @@ const Dashboard = () => {
                 padding: '6px 10px', cursor: chatLoading ? 'not-allowed' : 'pointer',
                 color: chatLoading ? 'var(--text-muted)' : '#ffffff',
                 display: 'flex', alignItems: 'center',
-            }}
+              }}
             >
-            <Send size={13} />
+              <Send size={13} />
             </button>
           </div>
         </div>
