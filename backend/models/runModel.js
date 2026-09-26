@@ -40,10 +40,24 @@ export const updateSyntaxCheck = async (runId, syntaxCheck) => {
 // Update run with final diagnosis and failing test
 export const updateDiagnosis = async (runId, aiDiagnosis, failingInput, outputBuggy, outputCorrect) => {
   log.step('runModel', '4', `Updating diagnosis for run: ${runId}`);
+
+  // Safely serialize diagnosis to JSON string for PostgreSQL JSONB column
+  let diagnosisJson = null;
+  if (aiDiagnosis !== null && aiDiagnosis !== undefined) {
+    try {
+      diagnosisJson = JSON.stringify(aiDiagnosis);
+      // Validate it can be parsed back — catches any circular or invalid values
+      JSON.parse(diagnosisJson);
+    } catch {
+      log.warn('runModel', 'Failed to serialize diagnosis, saving null');
+      diagnosisJson = null;
+    }
+  }
+
   const result = await pool.query(
-    `UPDATE runs SET ai_diagnosis = $1, failing_input = $2, output_buggy = $3, 
+    `UPDATE runs SET ai_diagnosis = $1::jsonb, failing_input = $2, output_buggy = $3, 
      output_correct = $4, status = 'completed' WHERE id = $5 RETURNING id`,
-    [aiDiagnosis, failingInput, outputBuggy, outputCorrect, runId]
+    [diagnosisJson, failingInput, outputBuggy, outputCorrect, runId]
   );
   return result.rows[0] || null;
 };
