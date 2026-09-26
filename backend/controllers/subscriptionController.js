@@ -9,11 +9,16 @@ import {
 } from '../models/subscriptionModel.js';
 import log from '../config/logger.js';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+const getRazorpay = () => {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
+  if (!keyId || keyId.includes('placeholder') || keyId.includes('xxx')) {
+    return null;
+  }
+
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+};
 // GET /api/subscription/plans
 export const getPlans = async (req, res) => {
   try {
@@ -89,7 +94,10 @@ export const createOrder = async (req, res) => {
     if (!process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('xxx')) {
       return res.status(503).json({ error: 'Payment gateway not configured yet. Coming soon.' });
     }
-
+    const razorpay = getRazorpay();
+    if (!razorpay) {
+      return res.status(503).json({ error: 'Payment gateway not configured yet. Coming soon.' });
+    }
     // Create Razorpay order
     const order = await razorpay.orders.create({
       amount: plan.price_paise,
@@ -128,7 +136,10 @@ export const createOrder = async (req, res) => {
 export const verifyPayment = async (req, res) => {
   const userId = req.session.userId;
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planSlug } = req.body;
-
+  const razorpay = getRazorpay();
+  if (!razorpay) {
+    return res.status(503).json({ error: 'Payment gateway not configured yet. Coming soon.' });
+  }
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !planSlug) {
     return res.status(400).json({ error: 'Missing payment verification fields' });
   }
